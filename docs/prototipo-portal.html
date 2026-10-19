@@ -1,0 +1,499 @@
+<title>Portal de Pedidos</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: barra lateral de navegación + área de trabajo; en móvil, pestañas horizontales arriba. Detalle de pedido en panel lateral. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --surface-2:#eef1f4; --line:#dde2e8;
+  --ink:#15202b; --ink-2:#4d5b69; --ink-3:#7a8794;
+  --accent:#0b6a6f; --accent-ink:#ffffff; --accent-soft:#dcefef;
+  --good:#1f7a3f; --good-soft:#e1f2e6; --warn:#9a6200; --warn-soft:#fbefd6; --bad:#b3261e; --bad-soft:#fbe3e1; --info:#2457a6; --info-soft:#e2ebf8;
+  --shadow:0 10px 30px rgba(21,32,43,.14);
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --surface:#161e26; --surface-2:#1d2731; --line:#2a3642;
+  --ink:#e7edf2; --ink-2:#a9b6c2; --ink-3:#7d8b98;
+  --accent:#4cb7b9; --accent-ink:#06282a; --accent-soft:#163536;
+  --good:#5cc27f; --good-soft:#15301f; --warn:#e3a94a; --warn-soft:#33270f; --bad:#f0827a; --bad-soft:#3a1a18; --info:#83aef0; --info-soft:#18263b;
+  --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --surface:#161e26; --surface-2:#1d2731; --line:#2a3642;
+  --ink:#e7edf2; --ink-2:#a9b6c2; --ink-3:#7d8b98;
+  --accent:#4cb7b9; --accent-ink:#06282a; --accent-soft:#163536;
+  --good:#5cc27f; --good-soft:#15301f; --warn:#e3a94a; --warn-soft:#33270f; --bad:#f0827a; --bad-soft:#3a1a18; --info:#83aef0; --info-soft:#18263b;
+  --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-size:.92em;letter-spacing:-.01em}
+.num{font-variant-numeric:tabular-nums}
+.app{display:grid;grid-template-columns:232px minmax(0,1fr);min-height:100%}
+.side{background:var(--surface);border-right:1px solid var(--line);padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:16px;display:flex;flex-direction:column;gap:20px;position:sticky;top:env(safe-area-inset-top,0px);height:100vh;max-height:100%}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;border-radius:7px;background:var(--accent);display:grid;place-items:center;color:var(--accent-ink);font-family:var(--f-display);font-weight:600;font-size:15px}
+.brand b{font-family:var(--f-display);font-weight:600;font-size:17px;letter-spacing:.01em;display:block;line-height:1.1}
+.brand small{color:var(--ink-3);font-size:11.5px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-2);font-weight:500}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav button:focus-visible{outline:2px solid var(--accent)}
+.nav .count{margin-left:auto;font-size:11.5px;color:var(--ink-3)}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:8px}
+.label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.role-switch{display:flex;flex-direction:column;gap:4px}
+.role-switch select{width:100%;padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+.demo-note{font-size:12px;color:var(--ink-3)}
+.main{min-width:0;padding-block:24px 48px;padding-left:28px;padding-right:max(28px,env(safe-area-inset-right,0px))}
+.topbar{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:20px}
+.topbar h1{font-family:var(--f-display);font-weight:600;font-size:26px;line-height:1.15;margin:0;text-wrap:balance}
+.topbar p{margin:2px 0 0;color:var(--ink-2)}
+.who{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px 4px 4px}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--surface-2);display:grid;place-items:center;font-weight:600;font-size:12px;color:var(--ink-2)}
+.who span{font-size:13px}
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.kpi .v{font-family:var(--f-display);font-size:26px;font-weight:600;line-height:1.1}
+.kpi .s{color:var(--ink-3);font-size:12.5px}
+.kpi.alert .v{color:var(--bad)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;min-width:0}
+.panel-h{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.panel-h h2{margin:0;font-family:var(--f-display);font-weight:600;font-size:17px}
+.panel-b{padding:14px 16px}
+.two{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);font-weight:600;text-align:left;padding:10px 16px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 16px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+tbody tr.click{cursor:pointer}
+tbody tr.click:hover{background:var(--surface-2)}
+.sub{color:var(--ink-3);font-size:12.5px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.p-open{background:var(--info-soft);color:var(--info)}
+.p-prep{background:var(--warn-soft);color:var(--warn)}
+.p-ship{background:var(--accent-soft);color:var(--accent)}
+.p-done{background:var(--good-soft);color:var(--good)}
+.p-inv{background:var(--surface-2);color:var(--ink-2)}
+.p-bad{background:var(--bad-soft);color:var(--bad)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.search{flex:1 1 220px;min-width:0;padding:8px 12px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;font-size:12.5px;color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:7px 12px;font-weight:500;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.sm{padding:4px 10px;font-size:12.5px}
+.list{display:flex;flex-direction:column}
+.li{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--line)}
+.li:last-child{border-bottom:0}
+.li button.link{all:unset;cursor:pointer;color:var(--accent);font-weight:500}
+.meter{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;min-width:80px}
+.meter i{display:block;height:100%;background:var(--accent)}
+.meter.hi i{background:var(--warn)}
+.kv{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;margin:0}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0}
+/* Drawer */
+.scrim{position:fixed;inset:0;background:rgba(10,16,22,.42);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(720px,100%);background:var(--bg);z-index:21;box-shadow:var(--shadow);overflow-y:auto;padding-top:calc(20px + env(safe-area-inset-top,0px));padding-bottom:calc(32px + env(safe-area-inset-bottom,0px));padding-left:24px;padding-right:max(24px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+.drawer-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.drawer-h h2{font-family:var(--f-display);font-size:22px;margin:0;font-weight:600}
+.close{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:7px;font-size:20px;color:var(--ink-2)}
+.close:hover{background:var(--surface-2)}
+.steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;list-style:none;margin:0;padding:0}
+.steps li{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--ink-3)}
+.steps li::before{content:"";height:4px;border-radius:2px;background:var(--line)}
+.steps li.on{color:var(--ink)}
+.steps li.on::before{background:var(--accent)}
+.steps li.now{font-weight:600}
+.track{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.track li{display:grid;grid-template-columns:14px minmax(0,1fr);gap:10px;padding-bottom:12px;position:relative}
+.track li::before{content:"";width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);background:var(--surface);margin-top:5px}
+.track li:first-child::before{background:var(--accent)}
+.track li::after{content:"";position:absolute;left:6px;top:18px;bottom:0;width:2px;background:var(--line)}
+.track li:last-child::after{display:none}
+.doc{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);flex-wrap:wrap}
+.doc-ic{width:32px;height:38px;border-radius:4px;background:var(--bad-soft);color:var(--bad);font-size:10px;font-weight:700;display:grid;place-items:end center;padding-bottom:5px;flex:none}
+.doc .grow{flex:1 1 160px;min-width:0}
+.form{display:flex;flex-direction:column;gap:8px}
+.form select,.form textarea{padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);width:100%}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;z-index:40;box-shadow:var(--shadow);max-width:calc(100% - 32px);font-size:13.5px}
+.empty{padding:28px 16px;text-align:center;color:var(--ink-3)}
+.banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:10px 14px;color:var(--ink-2);font-size:13px}
+.status-dot{width:9px;height:9px;border-radius:50%;background:var(--good);display:inline-block}
+.status-dot.idle{background:var(--ink-3)}
+@media (max-width:980px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;height:auto;flex-direction:column;gap:12px;border-right:0;border-bottom:1px solid var(--line);padding-block:12px;padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .nav{flex-direction:row;overflow-x:auto;gap:4px;padding-bottom:2px}
+  .nav button{white-space:nowrap}
+  .nav .count{display:none}
+  .side-foot{margin-top:0;flex-direction:row;flex-wrap:wrap;align-items:center}
+  .demo-note{display:none}
+  .main{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+  .drawer{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  td,th{padding:9px 12px}
+  .hide-m{display:none}
+}
+@media (prefers-reduced-motion:no-preference){.drawer{animation:slide .22s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="brand-mark">P</div><div><b>Portal de Pedidos</b><small id="company">Distribuciones Ejemplo S.A.</small></div></div>
+    <nav class="nav" id="nav" aria-label="Secciones"></nav>
+    <div class="side-foot">
+      <div class="role-switch">
+        <label class="label" for="role">Ver como (demo)</label>
+        <select id="role">
+          <option value="cliente">Cliente · Ferretería Martín</option>
+          <option value="comercial">Comercial · Laura Gómez</option>
+          <option value="admin">Administración</option>
+        </select>
+      </div>
+      <p class="demo-note">Prototipo con datos de ejemplo. Los datos reales llegarán de SAP por ficheros de exportación.</p>
+    </div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div id="overlay" hidden></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+const TODAY = new Date('2026-10-19T12:00:00');
+const DAY = 864e5;
+let seed = 20261019;
+const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const pick = a => a[Math.floor(rnd() * a.length)];
+const eur = new Intl.NumberFormat('es-ES', {style:'currency', currency:'EUR'});
+const fmt = d => d.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'});
+const fmtShort = d => d.toLocaleDateString('es-ES', {day:'numeric', month:'short'});
+const addDays = (d, n) => new Date(d.getTime() + n * DAY);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const REPS = {r1:{name:'Laura Gómez', phone:'+34 947 210 455', email:'laura.gomez@ejemplo.es'}, r2:{name:'Javier Ortega', phone:'+34 947 210 462', email:'javier.ortega@ejemplo.es'}};
+const CLIENTS = [
+  {id:'0000100231', name:'Ferretería Martín S.L.', city:'Valladolid', rep:'r1', terms:'Transferencia 30 días', credit:60000, nif:'B47123456', addr:'Pol. Ind. San Cristóbal, C/ Plata 14, 47012 Valladolid'},
+  {id:'0000100488', name:'Suministros Industriales Norte S.A.', city:'Bilbao', rep:'r1', terms:'Recibo 60 días', credit:150000, nif:'A48223344', addr:'Ribera de Deusto 70, 48014 Bilbao'},
+  {id:'0000100512', name:'Talleres Ribera S.Coop.', city:'Logroño', rep:'r1', terms:'Transferencia 30 días', credit:40000, nif:'F26334455', addr:'Av. de Burgos 112, 26006 Logroño'},
+  {id:'0000100679', name:'Construcciones Albia S.L.', city:'Zaragoza', rep:'r2', terms:'Recibo 90 días', credit:120000, nif:'B50445566', addr:'Pol. Plaza, C/ Bari 33, 50197 Zaragoza'},
+  {id:'0000100702', name:'Bricolaje Levante S.L.', city:'Valencia', rep:'r2', terms:'Transferencia 30 días', credit:50000, nif:'B46556677', addr:'C/ Músico Ginés 9, 46022 Valencia'},
+  {id:'0000100815', name:'Distribuciones Sur Andaluz S.L.', city:'Sevilla', rep:'r2', terms:'Recibo 60 días', credit:90000, nif:'B41667788', addr:'Pol. Store, C/ A 21, 41008 Sevilla'}
+];
+const MATS = [
+  ['10004512','Tornillo DIN 933 M10x40 galv. (caja 100)','CJ',18.40],['10004530','Tuerca DIN 934 M10 galv. (caja 200)','CJ',11.90],
+  ['10007120','Anclaje químico 300 ml','UN',9.75],['10007344','Taco nylon 8x40 (bolsa 500)','BL',22.10],
+  ['10011020','Disco corte inox 125x1 mm','UN',1.65],['10011088','Broca SDS-Plus 10x160','UN',4.20],
+  ['10015500','Guante nitrilo talla 9 (par)','PR',2.35],['10015710','Casco seguridad blanco','UN',7.90],
+  ['10020301','Cinta aislante PVC 19 mm','UN',0.95],['10020455','Silicona neutra 300 ml','UN',3.60],
+  ['10024010','Escalera aluminio 7 peldaños','UN',89.00],['10024377','Carretilla obra 90 L','UN',64.50]
+];
+const STEPS = ['Abierto','En preparación','Enviado','Entregado','Facturado'];
+const PILL = ['p-open','p-prep','p-ship','p-done','p-inv'];
+const CARRIERS = [{n:'SEUR', pre:'SE'}, {n:'MRW', pre:'MR'}, {n:'DHL Freight', pre:'DH'}, {n:'Transporte propio', pre:'TP'}];
+const HUBS = {Valladolid:'Valladolid', Bilbao:'Basauri', 'Logroño':'Logroño', Zaragoza:'Plaza (Zaragoza)', Valencia:'Ribarroja', Sevilla:'Dos Hermanas'};
+
+// Generar pedidos
+const raw = [];
+for (let i = 0; i < 64; i++) {
+  const c = i % 4 === 0 || rnd() < .18 ? CLIENTS[0] : pick(CLIENTS);
+  const age = Math.floor(rnd() * rnd() * 120);
+  raw.push({c, date: addDays(TODAY, -age), age});
+}
+raw.sort((a, b) => a.date - b.date);
+let invSeq = 90034100, delSeq = 80051200;
+const ORDERS = raw.map((r, idx) => {
+  const n = 1 + Math.floor(rnd() * 5), lines = [];
+  const used = new Set();
+  for (let k = 0; k < n; k++) {
+    let m; do { m = pick(MATS); } while (used.has(m[0])); used.add(m[0]);
+    const qty = m[3] > 50 ? 1 + Math.floor(rnd() * 6) : (5 + Math.floor(rnd() * 40)) * (m[2] === 'CJ' ? 1 : 2);
+    lines.push({pos:(k + 1) * 10, mat:m[0], desc:m[1], um:m[2], qty, price:m[3], amount:+(qty * m[3]).toFixed(2)});
+  }
+  const base = +lines.reduce((s, l) => s + l.amount, 0).toFixed(2);
+  const a = r.age;
+  let st = a < 2 ? 0 : a < 5 ? (rnd() < .5 ? 0 : 1) : a < 9 ? (rnd() < .6 ? 1 : 2) : a < 15 ? (rnd() < .5 ? 2 : 3) : a < 22 ? (rnd() < .4 ? 3 : 4) : 4;
+  const o = {id:String(125400 + idx * 3).padStart(10, '0'), po:'OC-' + r.c.city.slice(0,3).toUpperCase() + '-' + (2400 + idx * 7), date:r.date, client:r.c, lines, base, iva:+(base * .21).toFixed(2), total:+(base * 1.21).toFixed(2), status:st, req:addDays(r.date, 5 + Math.floor(rnd() * 8)), incoterm: rnd() < .8 ? 'DAP' : 'EXW'};
+  if (st >= 2) {
+    const car = pick(CARRIERS);
+    let ship = addDays(r.date, 2 + Math.floor(rnd() * 4));
+    if (st === 2 || ship > TODAY) ship = new Date(Math.max(addDays(r.date, 1), addDays(TODAY, -1 - Math.floor(rnd() * 2))));
+    const hub = HUBS[r.c.city];
+    const ev = [{d:ship, t:'Recogido en almacén', p:'Almacén central · Burgos'}];
+    ev.push({d:addDays(ship, .6), t:'En tránsito', p:'Plataforma ' + hub});
+    if (st >= 3) { ev.push({d:addDays(ship, 1.2), t:'En reparto', p:r.c.city}); ev.push({d:addDays(ship, 1.5), t:'Entregado · firmado por ' + pick(['J. Pérez','M. Ruiz','A. Sanz','almacén']), p:r.c.city}); }
+    o.delivery = {id:String(delSeq += 7).padStart(10, '0'), carrier:car.n, tracking:car.pre + String(Math.floor(rnd() * 9e9) + 1e9), ship, eta:addDays(ship, 2), events:ev.reverse(), packages:1 + Math.floor(rnd() * 4), kg:Math.round(5 + rnd() * 180)};
+  }
+  if (st >= 4) {
+    const days = /90/.test(r.c.terms) ? 90 : /60/.test(r.c.terms) ? 60 : 30;
+    const d = addDays(o.delivery.ship, 2), due = addDays(d, days);
+    let ps = 'Pendiente', paid = null;
+    if (due < TODAY) { if (rnd() < .82) { ps = 'Pagada'; paid = addDays(due, -Math.floor(rnd() * 5)); } else ps = 'Vencida'; }
+    else if (rnd() < .15) { ps = 'Pagada'; paid = addDays(d, Math.floor(rnd() * 10)); }
+    o.invoice = {id:String(invSeq += 11).padStart(10, '0'), date:d, due, amount:o.total, status:ps, paid, method: /Recibo/.test(r.c.terms) ? 'Recibo SEPA' : 'Transferencia'};
+  }
+  return o;
+}).reverse();
+
+const USERS = [
+  {n:'Ana Martín', e:'ana@ferreteriamartin.es', r:'Cliente', w:'Ferretería Martín S.L.', last:0},
+  {n:'Pablo Martín', e:'pablo@ferreteriamartin.es', r:'Cliente', w:'Ferretería Martín S.L.', last:3},
+  {n:'Iker Etxeberria', e:'compras@sinorte.es', r:'Cliente', w:'Suministros Industriales Norte S.A.', last:1},
+  {n:'Rosa Albiol', e:'r.albiol@albia.es', r:'Cliente', w:'Construcciones Albia S.L.', last:6},
+  {n:'Laura Gómez', e:'laura.gomez@ejemplo.es', r:'Comercial', w:'3 clientes', last:0},
+  {n:'Javier Ortega', e:'javier.ortega@ejemplo.es', r:'Comercial', w:'3 clientes', last:2},
+  {n:'Marta Díez', e:'marta.diez@ejemplo.es', r:'Administración', w:'Toda la empresa', last:0}
+];
+const IMPORTS = [
+  {f:'PEDIDOS_20261019_1400.csv', rows:42, ok:42, t:'19/10 14:02'}, {f:'ENTREGAS_20261019_1400.csv', rows:17, ok:17, t:'19/10 14:02'},
+  {f:'FACTURAS_20261019_1400.csv', rows:9, ok:9, t:'19/10 14:03'}, {f:'COBROS_20261019_1400.csv', rows:6, ok:5, t:'19/10 14:03', err:'1 fila: cliente 0000109999 no existe en el portal'},
+  {f:'CLIENTES_20261019_0600.csv', rows:6, ok:6, t:'19/10 06:01'}, {f:'PEDIDOS_20261019_1300.csv', rows:38, ok:38, t:'19/10 13:02'}
+];
+
+const ME = {cliente:{name:'Ana Martín', sub:'Ferretería Martín S.L.', ini:'AM'}, comercial:{name:'Laura Gómez', sub:'Comercial · 3 clientes', ini:'LG'}, admin:{name:'Marta Díez', sub:'Administración', ini:'MD'}};
+const state = {role:'cliente', view:'resumen', q:'', filter:'todos', invFilter:'todas', clientFilter:''};
+try { const s = JSON.parse(localStorage.getItem('portal-demo') || '{}'); if (s.role) state.role = s.role; } catch(e) {}
+
+const scopeClients = () => state.role === 'cliente' ? [CLIENTS[0]] : state.role === 'comercial' ? CLIENTS.filter(c => c.rep === 'r1') : CLIENTS;
+const scopeOrders = () => { const ids = new Set(scopeClients().map(c => c.id)); return ORDERS.filter(o => ids.has(o.client.id) && (!state.clientFilter || o.client.id === state.clientFilter)); };
+const invoices = () => scopeOrders().filter(o => o.invoice).map(o => ({...o.invoice, order:o}));
+const multi = () => state.role !== 'cliente';
+
+const pill = o => `<span class="pill ${PILL[o.status]}">${STEPS[o.status]}</span>`;
+const invPill = s => `<span class="pill ${s === 'Pagada' ? 'p-done' : s === 'Vencida' ? 'p-bad' : 'p-prep'}">${s}</span>`;
+
+function navItems(){
+  const it = [['resumen','Resumen'],['pedidos','Pedidos'],['entregas','Entregas'],['facturas','Facturas y pagos']];
+  if (state.role === 'cliente') it.push(['cuenta','Mi cuenta']);
+  else it.push(['clientes','Clientes']);
+  if (state.role === 'admin') it.push(['sync','Sincronización'],['usuarios','Usuarios']);
+  return it;
+}
+function renderNav(){
+  const counts = {pedidos: scopeOrders().filter(o => o.status < 3).length, facturas: invoices().filter(i => i.status !== 'Pagada').length};
+  document.getElementById('nav').innerHTML = navItems().map(([k, l]) => `<button data-view="${k}" ${state.view === k ? 'aria-current="page"' : ''}>${l}${counts[k] ? `<span class="count num">${counts[k]}</span>` : ''}</button>`).join('');
+}
+
+function header(title, sub){
+  const me = ME[state.role];
+  return `<div class="topbar"><div><h1>${title}</h1>${sub ? `<p>${sub}</p>` : ''}</div><div class="who"><div class="avatar">${me.ini}</div><span><b>${me.name}</b><br><span class="sub">${me.sub}</span></span></div></div>`;
+}
+function clientSelect(){
+  if (!multi()) return '';
+  return `<select id="clientFilter" class="search" style="flex:0 1 260px" aria-label="Filtrar por cliente"><option value="">Todos los clientes</option>${scopeClients().map(c => `<option value="${c.id}" ${state.clientFilter === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>`;
+}
+
+function vResumen(){
+  const os = scopeOrders(), inv = invoices();
+  const open = os.filter(o => o.status < 2), transit = os.filter(o => o.status === 2);
+  const pend = inv.filter(i => i.status !== 'Pagada'), late = inv.filter(i => i.status === 'Vencida');
+  const sum = a => a.reduce((s, i) => s + i.amount, 0);
+  const greet = state.role === 'cliente' ? 'Hola, Ana' : state.role === 'comercial' ? 'Tu cartera hoy' : 'Visión general';
+  const sub = state.role === 'cliente' ? 'Ferretería Martín S.L. · cliente ' + CLIENTS[0].id : state.role === 'comercial' ? scopeClients().length + ' clientes asignados' : CLIENTS.length + ' clientes · 2 comerciales';
+  let side = '';
+  if (state.role === 'cliente') {
+    const c = CLIENTS[0], r = REPS[c.rep], used = sum(pend) + open.reduce((s, o) => s + o.total, 0), pct = Math.min(100, used / c.credit * 100);
+    side = `<section class="panel"><div class="panel-h"><h2>Tu cuenta</h2></div><div class="panel-b grid" style="gap:14px">
+      <div><div class="label">Crédito disponible</div><div style="display:flex;justify-content:space-between;gap:8px;margin:4px 0 6px"><b class="num">${eur.format(c.credit - used)}</b><span class="sub num">de ${eur.format(c.credit)}</span></div><div class="meter ${pct > 75 ? 'hi' : ''}"><i style="width:${pct}%"></i></div></div>
+      <div><div class="label">Tu comercial</div><p style="margin:4px 0 0"><b>${r.name}</b><br><span class="sub">${r.phone} · ${r.email}</span></p></div>
+      <div><div class="label">Condiciones de pago</div><p style="margin:4px 0 0">${c.terms}</p></div></div></section>`;
+  } else {
+    const rows = scopeClients().map(c => ({c, p: sum(pend.filter(i => i.order.client.id === c.id)), l: sum(late.filter(i => i.order.client.id === c.id))})).sort((a, b) => b.l - a.l || b.p - a.p);
+    side = `<section class="panel"><div class="panel-h"><h2>Cobros por cliente</h2></div><div class="list">${rows.map(x => `<div class="li"><div style="min-width:0"><b>${esc(x.c.name)}</b><div class="sub">${x.c.city} · ${REPS[x.c.rep].name}</div></div><div style="text-align:right" class="num">${eur.format(x.p)}${x.l ? `<div class="sub" style="color:var(--bad)">${eur.format(x.l)} vencido</div>` : '<div class="sub">al día</div>'}</div></div>`).join('')}</div></section>`;
+  }
+  const upcoming = os.filter(o => o.status === 2 || o.status === 1).sort((a, b) => a.req - b.req).slice(0, 5);
+  return header(greet, sub) + `
+  <div class="grid kpis">
+    <div class="kpi"><span class="label">Pedidos abiertos</span><span class="v num">${open.length}</span><span class="s">${eur.format(open.reduce((s, o) => s + o.total, 0))}</span></div>
+    <div class="kpi"><span class="label">En camino</span><span class="v num">${transit.length}</span><span class="s">${transit.length ? 'Próxima llegada ' + fmtShort(transit.map(o => o.delivery.eta).sort((a, b) => a - b)[0]) : 'Nada en tránsito'}</span></div>
+    <div class="kpi"><span class="label">Facturas pendientes</span><span class="v num">${pend.length}</span><span class="s">${eur.format(sum(pend))}</span></div>
+    <div class="kpi ${late.length ? 'alert' : ''}"><span class="label">Vencido</span><span class="v num">${eur.format(sum(late))}</span><span class="s">${late.length} factura${late.length === 1 ? '' : 's'}</span></div>
+  </div>
+  <div class="grid two" style="margin-top:16px">
+    <div class="grid" style="align-content:start">
+      <section class="panel"><div class="panel-h"><h2>Próximas entregas</h2><button class="btn sm" data-view="entregas">Ver entregas</button></div>
+      <div class="list">${upcoming.length ? upcoming.map(o => `<div class="li"><div style="min-width:0"><button class="link mono" data-order="${o.id}">${o.id}</button> ${pill(o)}<div class="sub">${multi() ? esc(o.client.name) + ' · ' : ''}${o.delivery ? o.delivery.carrier + ' · llega ' + fmtShort(o.delivery.eta) : 'Fecha solicitada ' + fmtShort(o.req)}</div></div><b class="num">${eur.format(o.total)}</b></div>`).join('') : '<div class="empty">No hay entregas en curso.</div>'}</div></section>
+      <section class="panel"><div class="panel-h"><h2>Últimos pedidos</h2><button class="btn sm" data-view="pedidos">Ver todos</button></div>${ordersTable(os.slice(0, 6), true)}</section>
+    </div>
+    <div class="grid" style="align-content:start">${side}</div>
+  </div>`;
+}
+
+function ordersTable(os, compact){
+  if (!os.length) return '<div class="empty">No hay pedidos con estos filtros.</div>';
+  return `<div class="table-wrap"><table><thead><tr><th>Pedido</th><th>Fecha</th>${multi() ? '<th>Cliente</th>' : ''}${compact ? '' : '<th class="hide-m">Su referencia</th><th class="hide-m">Entrega solicitada</th>'}<th>Estado</th><th class="r">Importe</th></tr></thead><tbody>
+  ${os.map(o => `<tr class="click" data-order="${o.id}" tabindex="0"><td class="mono">${o.id}</td><td class="num">${fmt(o.date)}</td>${multi() ? `<td>${esc(o.client.name)}</td>` : ''}${compact ? '' : `<td class="hide-m mono">${o.po}</td><td class="hide-m num">${fmt(o.req)}</td>`}<td>${pill(o)}</td><td class="r num">${eur.format(o.total)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+function vPedidos(){
+  let os = scopeOrders();
+  const f = state.filter;
+  if (f !== 'todos') os = os.filter(o => STEPS[o.status] === f);
+  const q = state.q.trim().toLowerCase();
+  if (q) os = os.filter(o => o.id.includes(q) || o.po.toLowerCase().includes(q) || o.client.name.toLowerCase().includes(q) || o.lines.some(l => l.desc.toLowerCase().includes(q) || l.mat.includes(q)));
+  return header('Pedidos', 'Todos los pedidos de venta' + (multi() ? ' de tus clientes' : '') + ', con su estado en SAP') + `
+  <section class="panel"><div class="panel-h" style="flex-direction:column;align-items:stretch;gap:10px">
+    <div class="toolbar"><input id="q" class="search" type="search" placeholder="Buscar por nº de pedido, su referencia, material o cliente" value="${esc(state.q)}">${clientSelect()}<button class="btn" id="export">Exportar a Excel</button></div>
+    <div class="chips" role="group" aria-label="Estado">${['todos', ...STEPS].map(s => `<button class="chip" data-filter="${s}" aria-pressed="${f === s}">${s === 'todos' ? 'Todos' : s}</button>`).join('')}</div>
+  </div>${ordersTable(os, false)}<div class="panel-b sub">${os.length} pedido${os.length === 1 ? '' : 's'}</div></section>`;
+}
+
+function vEntregas(){
+  const os = scopeOrders().filter(o => o.delivery);
+  return header('Entregas', 'Albaranes y seguimiento del transporte') + `<section class="panel"><div class="panel-h"><h2>Envíos recientes</h2>${clientSelect()}</div>
+  <div class="table-wrap"><table><thead><tr><th>Entrega</th><th>Pedido</th>${multi() ? '<th>Cliente</th>' : ''}<th>Transportista</th><th class="hide-m">Seguimiento</th><th>Último evento</th><th class="r hide-m">Bultos</th></tr></thead><tbody>
+  ${os.map(o => { const d = o.delivery, e = d.events[0]; return `<tr class="click" data-order="${o.id}" tabindex="0"><td class="mono">${d.id}</td><td class="mono">${o.id}</td>${multi() ? `<td>${esc(o.client.name)}</td>` : ''}<td>${d.carrier}</td><td class="hide-m mono">${d.tracking}</td><td><span class="pill ${o.status >= 3 ? 'p-done' : 'p-ship'}">${e.t.split(' · ')[0]}</span><div class="sub">${fmtShort(e.d)} · ${e.p}</div></td><td class="r num hide-m">${d.packages} · ${d.kg} kg</td></tr>`; }).join('')}</tbody></table></div></section>`;
+}
+
+function vFacturas(){
+  let inv = invoices().sort((a, b) => (a.status === 'Pagada') - (b.status === 'Pagada') || a.due - b.due);
+  const sum = a => a.reduce((s, i) => s + i.amount, 0);
+  const pend = inv.filter(i => i.status === 'Pendiente'), late = inv.filter(i => i.status === 'Vencida'), paid = inv.filter(i => i.status === 'Pagada' && i.paid > addDays(TODAY, -90));
+  const f = state.invFilter;
+  if (f !== 'todas') inv = inv.filter(i => i.status === f);
+  return header('Facturas y pagos', 'Descarga tus facturas en PDF y consulta vencimientos y cobros') + `
+  <div class="grid kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="kpi"><span class="label">Pendiente de pago</span><span class="v num">${eur.format(sum(pend))}</span><span class="s">${pend.length} facturas sin vencer</span></div>
+    <div class="kpi ${late.length ? 'alert' : ''}"><span class="label">Vencido</span><span class="v num">${eur.format(sum(late))}</span><span class="s">${late.length} facturas</span></div>
+    <div class="kpi"><span class="label">Pagado (90 días)</span><span class="v num">${eur.format(sum(paid))}</span><span class="s">${paid.length} cobros</span></div>
+  </div>
+  <section class="panel" style="margin-top:16px"><div class="panel-h"><div class="chips">${['todas','Pendiente','Vencida','Pagada'].map(s => `<button class="chip" data-inv="${s}" aria-pressed="${f === s}">${s === 'todas' ? 'Todas' : s === 'Pendiente' ? 'Pendientes' : s === 'Vencida' ? 'Vencidas' : 'Pagadas'}</button>`).join('')}</div>${clientSelect()}</div>
+  <div class="table-wrap"><table><thead><tr><th>Factura</th><th>Fecha</th>${multi() ? '<th>Cliente</th>' : ''}<th>Vencimiento</th><th>Estado</th><th class="r">Importe</th><th></th></tr></thead><tbody>
+  ${inv.length ? inv.map(i => `<tr><td class="mono"><button class="btn sm" data-order="${i.order.id}" style="font-family:var(--f-mono)">${i.id}</button></td><td class="num">${fmt(i.date)}</td>${multi() ? `<td>${esc(i.order.client.name)}</td>` : ''}<td class="num">${fmt(i.due)}${i.status === 'Pagada' ? `<div class="sub">Pagada ${fmtShort(i.paid)}</div>` : i.status === 'Vencida' ? `<div class="sub" style="color:var(--bad)">${Math.round((TODAY - i.due) / DAY)} días</div>` : `<div class="sub">en ${Math.round((i.due - TODAY) / DAY)} días</div>`}</td><td>${invPill(i.status)}</td><td class="r num">${eur.format(i.amount)}</td><td style="white-space:nowrap"><button class="btn sm" data-pdf="${i.id}">PDF</button> ${i.status !== 'Pagada' && state.role === 'cliente' ? `<button class="btn sm primary" data-pay="${i.id}">Pagar</button>` : ''}</td></tr>`).join('') : `<tr><td colspan="7"><div class="empty">No hay facturas en este estado.</div></td></tr>`}
+  </tbody></table></div></section>`;
+}
+
+function vCuenta(){
+  const c = CLIENTS[0], r = REPS[c.rep];
+  return header('Mi cuenta', 'Datos de cliente tal como figuran en SAP') + `<div class="grid two">
+  <section class="panel"><div class="panel-h"><h2>Datos de empresa</h2></div><div class="panel-b"><dl class="kv">
+    <dt>Razón social</dt><dd>${c.name}</dd><dt>Nº de cliente</dt><dd class="mono">${c.id}</dd><dt>NIF</dt><dd class="mono">${c.nif}</dd>
+    <dt>Dirección de entrega</dt><dd>${c.addr}</dd><dt>Condiciones de pago</dt><dd>${c.terms}</dd><dt>Límite de crédito</dt><dd class="num">${eur.format(c.credit)}</dd>
+    <dt>Comercial</dt><dd>${r.name} · ${r.phone}</dd></dl>
+    <p class="sub" style="margin:14px 0 0">¿Algún dato no es correcto? <button class="btn sm" data-toast="Solicitud enviada a administración (demo)">Solicitar cambio</button></p></div></section>
+  <section class="panel"><div class="panel-h"><h2>Usuarios de tu empresa</h2><button class="btn sm" data-toast="Invitación enviada (demo)">Invitar usuario</button></div><div class="list">
+    ${USERS.filter(u => u.w === c.name).map(u => `<div class="li"><div><b>${u.n}</b><div class="sub">${u.e}</div></div><span class="sub">${u.last === 0 ? 'Activo hoy' : 'Hace ' + u.last + ' días'}</span></div>`).join('')}</div>
+    <div class="panel-h" style="border-top:1px solid var(--line)"><h2>Avisos por correo</h2></div><div class="panel-b grid" style="gap:8px">
+    ${['Pedido confirmado','Pedido enviado, con número de seguimiento','Factura emitida','Factura a punto de vencer (5 días antes)'].map((t, k) => `<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="av${k}" ${k < 3 ? 'checked' : ''}> ${t}</label>`).join('')}</div></section></div>`;
+}
+
+function vClientes(){
+  const inv = invoices();
+  return header('Clientes', state.role === 'comercial' ? 'Tu cartera de clientes' : 'Todos los clientes de la empresa') + `<section class="panel"><div class="table-wrap"><table><thead><tr><th>Cliente</th><th class="hide-m">Nº SAP</th>${state.role === 'admin' ? '<th>Comercial</th>' : ''}<th class="r">Pedidos abiertos</th><th class="r">Pendiente</th><th>Riesgo usado</th></tr></thead><tbody>
+  ${scopeClients().map(c => { const os = ORDERS.filter(o => o.client.id === c.id), p = inv.filter(i => i.order.client.id === c.id && i.status !== 'Pagada').reduce((s, i) => s + i.amount, 0), used = p + os.filter(o => o.status < 4).reduce((s, o) => s + o.total, 0), pct = Math.min(100, used / c.credit * 100), late = inv.some(i => i.order.client.id === c.id && i.status === 'Vencida');
+    return `<tr class="click" data-client="${c.id}" tabindex="0"><td><b>${esc(c.name)}</b><div class="sub">${c.city}${late ? ' · <span style="color:var(--bad)">con vencidos</span>' : ''}</div></td><td class="mono hide-m">${c.id}</td>${state.role === 'admin' ? `<td>${REPS[c.rep].name}</td>` : ''}<td class="r num">${os.filter(o => o.status < 3).length}</td><td class="r num">${eur.format(p)}</td><td><div style="display:flex;gap:8px;align-items:center"><div class="meter ${pct > 75 ? 'hi' : ''}" style="flex:1"><i style="width:${pct}%"></i></div><span class="sub num">${Math.round(pct)}%</span></div></td></tr>`; }).join('')}</tbody></table></div></section>`;
+}
+
+function vSync(){
+  return header('Sincronización', 'Conexión con el ERP de la empresa') + `
+  <div class="grid two">
+    <section class="panel"><div class="panel-h"><h2><span class="status-dot"></span> SAP ECC · ficheros</h2><span class="pill p-done">Activo</span></div><div class="panel-b"><dl class="kv">
+      <dt>Método</dt><dd>Exportación programada desde SAP (job cada hora) a carpeta SFTP</dd><dt>Última importación</dt><dd>Hoy 14:03 · hace 4 min</dd><dt>Próxima</dt><dd>15:02</dd><dt>Datos en el portal</dt><dd class="num">${ORDERS.length} pedidos · ${ORDERS.filter(o => o.invoice).length} facturas · ${CLIENTS.length} clientes</dd></dl></div></section>
+    <section class="panel"><div class="panel-h"><h2><span class="status-dot idle"></span> SAP ECC · RFC/BAPI</h2><span class="pill p-inv">Preparado</span></div><div class="panel-b"><p style="margin:0 0 10px">El conector en tiempo real está listo para activarse cuando se instale el agente en vuestra red. Usará el mismo modelo de datos, así que el portal no cambia.</p><button class="btn sm" data-toast="Demo: aquí se configurarían host, cliente SAP y usuario RFC">Configurar conexión</button></div></section>
+  </div>
+  <section class="panel" style="margin-top:16px"><div class="panel-h"><h2>Últimos ficheros importados</h2></div><div class="table-wrap"><table><thead><tr><th>Fichero</th><th>Hora</th><th class="r">Filas</th><th>Resultado</th></tr></thead><tbody>
+  ${IMPORTS.map(i => `<tr><td class="mono">${i.f}</td><td class="num">${i.t}</td><td class="r num">${i.ok}/${i.rows}</td><td>${i.err ? `<span class="pill p-prep">Con avisos</span><div class="sub">${i.err}</div>` : '<span class="pill p-done">Correcto</span>'}</td></tr>`).join('')}</tbody></table></div></section>`;
+}
+
+function vUsuarios(){
+  return header('Usuarios', 'Quién tiene acceso y qué puede ver') + `<section class="panel"><div class="panel-h"><h2>${USERS.length} usuarios</h2><button class="btn sm primary" data-toast="Invitación enviada (demo)">Invitar usuario</button></div><div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Ve</th><th class="hide-m">Último acceso</th></tr></thead><tbody>
+  ${USERS.map(u => `<tr><td><b>${u.n}</b><div class="sub">${u.e}</div></td><td><span class="pill ${u.r === 'Cliente' ? 'p-open' : u.r === 'Comercial' ? 'p-ship' : 'p-inv'}">${u.r}</span></td><td>${u.w}</td><td class="hide-m sub">${u.last === 0 ? 'Hoy' : 'Hace ' + u.last + ' días'}</td></tr>`).join('')}</tbody></table></div></section>`;
+}
+
+function orderDrawer(id){
+  const o = ORDERS.find(x => x.id === id); if (!o) return;
+  const d = o.delivery, i = o.invoice;
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `<div class="scrim" data-close></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Pedido ${o.id}">
+    <div class="drawer-h"><div><div class="label">Pedido de venta</div><h2 class="mono">${o.id}</h2><div class="sub">${esc(o.client.name)} · su referencia <span class="mono">${o.po}</span></div></div><button class="close" data-close aria-label="Cerrar">×</button></div>
+    <ol class="steps">${STEPS.map((s, k) => `<li class="${k <= o.status ? 'on' : ''} ${k === o.status ? 'now' : ''}">${s}</li>`).join('')}</ol>
+    <section class="panel"><div class="panel-b"><dl class="kv"><dt>Fecha de pedido</dt><dd class="num">${fmt(o.date)}</dd><dt>Entrega solicitada</dt><dd class="num">${fmt(o.req)}</dd><dt>Incoterm</dt><dd>${o.incoterm}</dd><dt>Dirección</dt><dd>${o.client.addr}</dd></dl></div></section>
+    <section class="panel"><div class="panel-h"><h2>Líneas</h2><button class="btn sm" data-toast="Pedido añadido al carrito (demo)">Repetir pedido</button></div><div class="table-wrap"><table><thead><tr><th>Pos.</th><th>Material</th><th class="r">Cant.</th><th class="r hide-m">Precio</th><th class="r">Importe</th></tr></thead><tbody>
+      ${o.lines.map(l => `<tr><td class="mono">${String(l.pos).padStart(6, '0')}</td><td>${esc(l.desc)}<div class="sub mono">${l.mat}</div></td><td class="r num">${l.qty} ${l.um}</td><td class="r num hide-m">${eur.format(l.price)}</td><td class="r num">${eur.format(l.amount)}</td></tr>`).join('')}
+      <tr><td colspan="3"></td><td class="r sub hide-m">Base</td><td class="r num">${eur.format(o.base)}</td></tr>
+      <tr><td colspan="3"></td><td class="r sub hide-m">IVA 21%</td><td class="r num">${eur.format(o.iva)}</td></tr>
+      <tr><td colspan="3"></td><td class="r hide-m"><b>Total</b></td><td class="r num"><b>${eur.format(o.total)}</b></td></tr></tbody></table></div></section>
+    <section class="panel"><div class="panel-h"><h2>Entrega y transporte</h2>${d ? `<span class="mono sub">Albarán ${d.id}</span>` : ''}</div><div class="panel-b">
+      ${d ? `<dl class="kv" style="margin-bottom:14px"><dt>Transportista</dt><dd>${d.carrier}</dd><dt>Nº de seguimiento</dt><dd class="mono">${d.tracking}</dd><dt>Bultos</dt><dd class="num">${d.packages} · ${d.kg} kg</dd><dt>${o.status >= 3 ? 'Entregado' : 'Llegada prevista'}</dt><dd class="num">${fmt(o.status >= 3 ? d.events[0].d : d.eta)}</dd></dl>
+      <ol class="track">${d.events.map(e => `<li><div><b>${e.t}</b><div class="sub">${fmt(e.d)} ${e.d.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'})} · ${e.p}</div></div></li>`).join('')}</ol>
+      <div class="doc" style="margin-top:4px"><div class="doc-ic">PDF</div><div class="grow"><b>Albarán ${d.id}</b><div class="sub">${o.status >= 3 ? 'Con firma de entrega' : 'Sin firmar'}</div></div><button class="btn sm" data-pdf="${d.id}">Descargar</button></div>`
+      : `<p class="sub" style="margin:0">El pedido aún no ha salido del almacén. Verás aquí el transportista y el seguimiento en cuanto se cree la entrega en SAP.</p>`}
+    </div></section>
+    <section class="panel"><div class="panel-h"><h2>Factura y pago</h2></div><div class="panel-b">
+      ${i ? `<div class="doc"><div class="doc-ic">PDF</div><div class="grow"><b class="mono">Factura ${i.id}</b><div class="sub">${fmt(i.date)} · vence ${fmt(i.due)} · ${i.method}</div></div>${invPill(i.status)}<b class="num">${eur.format(i.amount)}</b><button class="btn sm" data-pdf="${i.id}">Descargar</button>${i.status !== 'Pagada' && state.role === 'cliente' ? `<button class="btn sm primary" data-pay="${i.id}">Pagar</button>` : ''}</div>${i.paid ? `<p class="sub" style="margin:10px 0 0">Cobro registrado el ${fmt(i.paid)}.</p>` : ''}`
+      : `<p class="sub" style="margin:0">Se facturará tras la entrega.</p>`}
+    </div></section>
+    <section class="panel"><div class="panel-h"><h2>¿Algún problema con este pedido?</h2></div><div class="panel-b"><form class="form" id="incForm"><label class="label" for="incType">Motivo</label><select id="incType"><option>Falta material</option><option>Material dañado</option><option>Retraso en la entrega</option><option>Error en factura</option><option>Otro</option></select><label class="label" for="incText">Detalle</label><textarea id="incText" rows="3" placeholder="Cuéntanos qué ha pasado y, si aplica, la posición afectada"></textarea><div><button class="btn primary" type="submit">Abrir incidencia</button></div></form></div></section>
+  </aside>`;
+  ov.hidden = false;
+  ov.querySelector('.close').focus();
+}
+function payDrawer(id){
+  const i = invoices().find(x => x.id === id); if (!i) return;
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `<div class="scrim" data-close></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Pagar factura" style="width:min(460px,100%)">
+  <div class="drawer-h"><div><div class="label">Pagar factura</div><h2 class="mono">${i.id}</h2><div class="sub">Vence ${fmt(i.due)}</div></div><button class="close" data-close aria-label="Cerrar">×</button></div>
+  <section class="panel"><div class="panel-b"><div class="label">Importe</div><div style="font-family:var(--f-display);font-size:30px;font-weight:600" class="num">${eur.format(i.amount)}</div></div></section>
+  <section class="panel"><div class="panel-b form"><span class="label">Forma de pago</span>
+    <label style="display:flex;gap:8px"><input type="radio" name="pm" id="pm1" checked> Tarjeta (pasarela segura del banco)</label>
+    <label style="display:flex;gap:8px"><input type="radio" name="pm" id="pm2"> Bizum</label>
+    <label style="display:flex;gap:8px"><input type="radio" name="pm" id="pm3"> Transferencia: ver datos bancarios</label>
+    <button class="btn primary" data-toast="Demo: aquí se abriría la pasarela de pago. El cobro se registraría en SAP." data-close style="margin-top:8px;justify-content:center">Continuar al pago</button></div></section></aside>`;
+  ov.hidden = false;
+}
+function closeOverlay(){ const ov = document.getElementById('overlay'); ov.hidden = true; ov.innerHTML = ''; }
+
+let tt;
+function toast(t){ const el = document.getElementById('toast'); el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 3200); }
+
+const VIEWS = {resumen:vResumen, pedidos:vPedidos, entregas:vEntregas, facturas:vFacturas, cuenta:vCuenta, clientes:vClientes, sync:vSync, usuarios:vUsuarios};
+function render(keepFocus){
+  if (!navItems().some(([k]) => k === state.view)) state.view = 'resumen';
+  renderNav();
+  document.getElementById('company').textContent = state.role === 'cliente' ? 'Ferretería Martín S.L.' : 'Distribuciones Ejemplo S.A.';
+  document.getElementById('main').innerHTML = VIEWS[state.view]();
+  if (keepFocus) { const q = document.getElementById('q'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+}
+
+document.getElementById('role').value = state.role;
+document.getElementById('role').addEventListener('change', e => { state.role = e.target.value; state.clientFilter = ''; state.filter = 'todos'; state.invFilter = 'todas'; try { localStorage.setItem('portal-demo', JSON.stringify({role:state.role})); } catch(err) {} render(); });
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-view],[data-order],[data-filter],[data-inv],[data-pdf],[data-pay],[data-toast],[data-close],[data-client],#export');
+  if (!t) return;
+  if (t.dataset.toast) toast(t.dataset.toast);
+  if (t.hasAttribute('data-close')) { closeOverlay(); return; }
+  if (t.dataset.view) { state.view = t.dataset.view; render(); window.scrollTo(0, 0); }
+  else if (t.dataset.order) orderDrawer(t.dataset.order);
+  else if (t.dataset.filter) { state.filter = t.dataset.filter; render(); }
+  else if (t.dataset.inv) { state.invFilter = t.dataset.inv; render(); }
+  else if (t.dataset.pdf) toast('Demo: el PDF ' + t.dataset.pdf + ' se descargará del archivo de SAP');
+  else if (t.dataset.pay) payDrawer(t.dataset.pay);
+  else if (t.dataset.client) { state.clientFilter = t.dataset.client; state.view = 'pedidos'; render(); }
+  else if (t.id === 'export') toast('Demo: se generaría un Excel con los pedidos filtrados');
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeOverlay();
+  if (e.key === 'Enter' && e.target.matches('tr[data-order]')) orderDrawer(e.target.dataset.order);
+  if (e.key === 'Enter' && e.target.matches('tr[data-client]')) { state.clientFilter = e.target.dataset.client; state.view = 'pedidos'; render(); }
+});
+document.addEventListener('input', e => { if (e.target.id === 'q') { state.q = e.target.value; render(true); } });
+document.addEventListener('change', e => { if (e.target.id === 'clientFilter') { state.clientFilter = e.target.value; render(); } });
+document.addEventListener('submit', e => { if (e.target.id === 'incForm') { e.preventDefault(); toast('Incidencia registrada. Tu comercial la verá en su bandeja (demo)'); e.target.reset(); } });
+render();
+})();
+</script>

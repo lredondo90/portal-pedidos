@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Portal.Api/Portal.Api.csproj" />
+    <Project Path="src/Portal.Connectors.SapFiles/Portal.Connectors.SapFiles.csproj" />
+    <Project Path="src/Portal.Connectors.SapRfc/Portal.Connectors.SapRfc.csproj" />
+    <Project Path="src/Portal.Domain/Portal.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Portal.Tests/Portal.Tests.csproj" />
+  </Folder>
+</Solution>

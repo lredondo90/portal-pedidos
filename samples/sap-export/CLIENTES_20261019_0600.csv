@@ -1,0 +1,4 @@
+KUNNR;NAME1;STCD1;STRAS;PSTLZ;ORT01;ZTERM_TEXTO;KLIMK;VEND_ID;VEND_NOMBRE;VEND_EMAIL
+0000100231;Ferretería Martín S.L.;B47123456;Pol. Ind. San Cristóbal, C/ Plata 14;47012;Valladolid;Transferencia 30 días;60000.00;E001;Laura Gómez;laura.gomez@ejemplo.es
+0000100488;Suministros Industriales Norte S.A.;A48223344;Ribera de Deusto 70;48014;Bilbao;Recibo 60 días;150000.00;E001;Laura Gómez;laura.gomez@ejemplo.es
+0000100679;Construcciones Albia S.L.;B50445566;Pol. Plaza, C/ Bari 33;50197;Zaragoza;Recibo 90 días;120000.00;E002;Javier Ortega;javier.ortega@ejemplo.es
