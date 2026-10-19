@@ -1,0 +1,52 @@
+name: Publicar
+
+# Construye las imágenes en cada cambio de main, las guarda en GitHub Container Registry (gratis)
+# y, si existe el secreto AZURE_CREDENTIALS, actualiza la demo en Azure Container Apps.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
+
+jobs:
+  imagenes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: src/Portal.Api/Dockerfile
+          push: true
+          tags: ghcr.io/${{ env.OWNER }}/portal-pedidos-api:${{ github.sha }},ghcr.io/${{ env.OWNER }}/portal-pedidos-api:latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
+          push: true
+          tags: ghcr.io/${{ env.OWNER }}/portal-pedidos-web:${{ github.sha }},ghcr.io/${{ env.OWNER }}/portal-pedidos-web:latest
+
+  azure:
+    needs: imagenes
+    runs-on: ubuntu-latest
+    if: ${{ vars.AZURE_RESOURCE_GROUP != '' }}
+    steps:
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Actualizar contenedores
+        run: |
+          az containerapp update -g "${{ vars.AZURE_RESOURCE_GROUP }}" -n portal-api --image ghcr.io/${{ env.OWNER }}/portal-pedidos-api:${{ github.sha }}
+          az containerapp update -g "${{ vars.AZURE_RESOURCE_GROUP }}" -n portal-web --image ghcr.io/${{ env.OWNER }}/portal-pedidos-web:${{ github.sha }}
