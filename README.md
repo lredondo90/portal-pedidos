@@ -12,6 +12,7 @@ RFC/BAPI y para otros ERP mediante conectores.
 | `src/Portal.Connectors.SapFiles` | Conector SAP ECC por ficheros CSV (activo) |
 | `src/Portal.Connectors.SapRfc` | Conector SAP ECC por RFC/BAPI (preparado, pendiente de SAP .NET Connector) |
 | `src/Portal.Api` | API ASP.NET Core (.NET 10) con sincronización periódica |
+| `web` | Web Next.js para clientes, comerciales y administración (ver `web/README.md`) |
 | `tests/Portal.Tests` | Pruebas de importación, estados y permisos |
 | `db/schema.sql` | Esquema PostgreSQL con seguridad a nivel de fila por empresa, cartera y cliente |
 | `docs/formato-ficheros-sap.md` | Especificación de los ficheros que debe exportar SAP |
@@ -41,6 +42,7 @@ curl -H "X-Demo-User: marta" http://localhost:5103/api/sync
 | GET | `/api/customers` | Clientes visibles |
 | GET | `/api/orders?status=&customer=&q=` | Pedidos visibles, con filtros |
 | GET | `/api/orders/{empresa}/{pedido}` | Detalle con líneas, entregas, seguimiento y facturas |
+| GET | `/api/deliveries?customer=` | Entregas visibles con su último evento de seguimiento |
 | GET | `/api/invoices?status=` | Facturas con estado Pendiente, Vencida o Pagada |
 | GET | `/api/documents/{empresa}/{Invoice\|DeliveryNote}/{id}` | PDF de factura o albarán |
 | GET / POST | `/api/sync` | Estado de la conexión con el ERP / sincronizar ahora (solo administración) |
@@ -57,6 +59,5 @@ El resto del portal no cambia: los dos conectores devuelven el mismo modelo com�
 
 - Almacén PostgreSQL (sustituye al almacén en memoria) usando `db/schema.sql`.
 - Inicio de sesión con Keycloak (sustituye a `X-Demo-User`).
-- Frontend Next.js a partir del prototipo navegable.
 - Pasarela de pago (Redsys o Stripe) y avisos por correo.
 - Despliegue en contenedores en la nube.
