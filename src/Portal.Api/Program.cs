@@ -39,7 +39,7 @@ var api = app.MapGroup("/api").AddEndpointFilter(async (ctx, next) =>
     return user is null ? Results.Unauthorized() : await next(ctx);
 });
 
-api.MapGet("/me", (CurrentUser cu) => cu.Get());
+api.MapGet("/me", (CurrentUser cu) => new { user = cu.Get(), name = cu.Name() });
 
 api.MapGet("/customers", (CurrentUser cu, IPortalStore store) => store.Customers(cu.Get()!));
 
@@ -48,6 +48,12 @@ api.MapGet("/orders", (CurrentUser cu, IPortalStore store, TimeProvider t, Order
 
 api.MapGet("/orders/{tenant}/{id}", (string tenant, string id, CurrentUser cu, IPortalStore store, TimeProvider t) =>
     store.Order(cu.Get()!, tenant, id, Today(t)) is { } o ? Results.Ok(o) : Results.NotFound());
+
+api.MapGet("/deliveries", (CurrentUser cu, IPortalStore store, TimeProvider t, string? customer) =>
+    store.Orders(cu.Get()!, new OrderQuery(CustomerId: customer), Today(t))
+        .SelectMany(o => o.Deliveries.Select(d => new DeliverySummary(o.Order.TenantId, d.Delivery.ErpId, o.Order.ErpId, o.Order.CustomerId, o.Customer?.Name,
+            d.Delivery.GoodsIssueDate, d.Delivery.Carrier, d.Delivery.TrackingNumber, d.Delivery.Packages, d.Delivery.WeightKg, d.Delivered, d.Events.FirstOrDefault())))
+        .OrderByDescending(d => d.GoodsIssueDate));
 
 api.MapGet("/invoices", (CurrentUser cu, IPortalStore store, TimeProvider t, InvoiceStatus? status) =>
     store.Invoices(cu.Get()!, status, Today(t)));
@@ -79,5 +85,8 @@ public sealed record OrderSummary(string TenantId, string Id, DateOnly Date, str
     public static OrderSummary From(OrderView v) =>
         new(v.Order.TenantId, v.Order.ErpId, v.Order.OrderDate, v.Order.CustomerId, v.Customer?.Name, v.Order.CustomerReference, v.Order.RequestedDate, v.Status, v.Order.Total, v.Order.Currency);
 }
+
+public sealed record DeliverySummary(string TenantId, string Id, string OrderId, string CustomerId, string? CustomerName, DateOnly? GoodsIssueDate,
+    string? Carrier, string? TrackingNumber, int? Packages, decimal? WeightKg, bool Delivered, TrackingEvent? LastEvent);
 
 public partial class Program;

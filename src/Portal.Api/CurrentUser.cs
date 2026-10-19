@@ -26,4 +26,10 @@ public sealed class CurrentUser(IHttpContextAccessor http, IConfiguration config
         var u = config.GetSection($"DemoUsers:{id}").Get<DemoUser>();
         return u is null ? null : new UserContext(id, u.TenantId, u.Role, u.SalesRepId, u.CustomerIds, u.TeamSalesRepIds);
     }
+
+    public string? Name()
+    {
+        var id = http.HttpContext?.Request.Headers["X-Demo-User"].ToString();
+        return string.IsNullOrEmpty(id) ? null : config[$"DemoUsers:{id}:Name"];
+    }
 }
