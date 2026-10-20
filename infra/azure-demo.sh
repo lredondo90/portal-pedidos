@@ -39,9 +39,9 @@ az containerapp create -g "$RG" -n portal-web --environment "$ENV_NAME" \
 
 # Aviso por correo en cuanto el gasto del mes pase de 1 €.
 SUB=$(az account show --query id -o tsv)
-az consumption budget create-with-rg -g "$RG" --budget-name aviso-1-euro --amount 1 --category cost --time-grain monthly \
-  --start-date "$(date +%Y-%m-01)" --end-date "$(date -d '+2 years' +%Y-%m-01)" \
-  --notifications "{\"Actual_GreaterThan_0_Percent\":{\"enabled\":true,\"operator\":\"GreaterThan\",\"threshold\":0,\"contactEmails\":[\"$BUDGET_EMAIL\"]}}" -o none \
+az consumption budget create-with-rg -g "$RG" --budget-name aviso-1-euro --amount 1 --category Cost --time-grain Monthly \
+  --time-period start-date="$(date +%Y-%m-01)" \
+  --notifications "{\"Actual_GreaterThan_1_Percent\":{\"enabled\":true,\"operator\":\"GreaterThan\",\"threshold\":1,\"contact-emails\":[\"$BUDGET_EMAIL\"]}}" -o none \
   || echo "No se pudo crear el aviso de gasto automáticamente; créalo en Cost Management > Budgets (suscripción $SUB)."
 
 echo "Portal publicado en: https://$(az containerapp show -g "$RG" -n portal-web --query properties.configuration.ingress.fqdn -o tsv)"
