@@ -51,12 +51,38 @@ public sealed class InMemoryPortalStore : IPortalStore
     private readonly ConcurrentDictionary<string, ShipTo> _shipTos = new();
     private readonly ConcurrentDictionary<string, OrderRequest> _requests = new();
 
+    // Índices secundarios: evitan recorrer todos los pedidos, entregas y facturas en cada consulta.
+    // Son el equivalente en memoria de los índices de db/schema.sql.
+    private readonly GroupIndex _customersByRep = new();
+    private readonly GroupIndex _ordersByCustomer = new();
+    private readonly GroupIndex _invoicesByCustomer = new();
+    private readonly GroupIndex _deliveriesByOrder = new();
+    private readonly GroupIndex _invoicesByOrder = new();
+
     public void Apply(ErpBatch batch)
     {
         foreach (var r in batch.SalesReps) _reps[Key(r.TenantId, r.ErpId)] = r;
-        foreach (var c in batch.Customers) _customers[Key(c.TenantId, c.ErpId)] = c;
-        foreach (var o in batch.Orders) _orders[Key(o.TenantId, o.ErpId)] = o;
-        foreach (var d in batch.Deliveries) _deliveries[Key(d.TenantId, d.ErpId)] = d;
+        foreach (var c in batch.Customers)
+        {
+            var k = Key(c.TenantId, c.ErpId);
+            _customers.TryGetValue(k, out var old);
+            _customers[k] = c;
+            _customersByRep.Move(old?.SalesRepId is { } o ? Key(old.TenantId, o) : null, c.SalesRepId is { } r ? Key(c.TenantId, r) : null, k);
+        }
+        foreach (var o in batch.Orders)
+        {
+            var k = Key(o.TenantId, o.ErpId);
+            _orders.TryGetValue(k, out var old);
+            _orders[k] = o;
+            _ordersByCustomer.Move(old is null ? null : Key(old.TenantId, old.CustomerId), Key(o.TenantId, o.CustomerId), k);
+        }
+        foreach (var d in batch.Deliveries)
+        {
+            var k = Key(d.TenantId, d.ErpId);
+            _deliveries.TryGetValue(k, out var old);
+            _deliveries[k] = d;
+            _deliveriesByOrder.Move(old is null ? null : Key(old.TenantId, old.OrderId), Key(d.TenantId, d.OrderId), k);
+        }
         foreach (var t in batch.Tracking)
         {
             var k = Key(t.TenantId, t.TrackingNumber);
@@ -66,7 +92,14 @@ public sealed class InMemoryPortalStore : IPortalStore
                 Delivered = old.Delivered || t.Delivered,
             });
         }
-        foreach (var i in batch.Invoices) _invoices[Key(i.TenantId, i.ErpId)] = i;
+        foreach (var i in batch.Invoices)
+        {
+            var k = Key(i.TenantId, i.ErpId);
+            _invoices.TryGetValue(k, out var old);
+            _invoices[k] = i;
+            _invoicesByCustomer.Move(old is null ? null : Key(old.TenantId, old.CustomerId), Key(i.TenantId, i.CustomerId), k);
+            _invoicesByOrder.Move(old?.OrderId is { } oo ? Key(old.TenantId, oo) : null, i.OrderId is { } on ? Key(i.TenantId, on) : null, k);
+        }
         foreach (var p in batch.Payments) _payments[Key(p.TenantId, p.InvoiceId)] = p;
         foreach (var p in batch.Products) _products[Key(p.TenantId, p.ErpId)] = p;
         foreach (var p in batch.Prices) _prices[Key(p.TenantId, p.CustomerId + "|" + p.MaterialId)] = p;
@@ -77,15 +110,30 @@ public sealed class InMemoryPortalStore : IPortalStore
                 _requests[Key(c.TenantId, c.RequestId)] = r with { Status = c.Ok ? OrderRequestStatus.Creado : OrderRequestStatus.Rechazado, ErpOrderId = c.ErpOrderId, Message = c.Message };
     }
 
-    public IReadOnlyList<Customer> Customers(UserContext user) =>
-        _customers.Values.Where(c => AccessPolicy.CanSeeCustomer(user, c)).OrderBy(c => c.Name).ToList();
+    public IReadOnlyList<Customer> Customers(UserContext user) => VisibleCustomers(user).OrderBy(c => c.Name).ToList();
+
+    /// <summary>Clientes que puede ver el usuario, buscados por índice según su rol (la regla final sigue siendo AccessPolicy).</summary>
+    private IEnumerable<Customer> VisibleCustomers(UserContext user)
+    {
+        IEnumerable<Customer> candidates = user.Role switch
+        {
+            Role.Customer => (user.CustomerIds ?? []).Select(id => _customers.GetValueOrDefault(Key(user.TenantId, id))).OfType<Customer>(),
+            Role.SalesRep or Role.SalesManager => new[] { user.SalesRepId }.Concat(user.TeamSalesRepIds ?? []).OfType<string>().Distinct()
+                .SelectMany(r => _customersByRep.Get(Key(user.TenantId, r))).Select(k => _customers.GetValueOrDefault(k)).OfType<Customer>(),
+            _ => _customers.Values,
+        };
+        return candidates.Where(c => AccessPolicy.CanSeeCustomer(user, c));
+    }
+
+    private IEnumerable<Customer> Scope(UserContext user, string? customerId) =>
+        customerId is null ? VisibleCustomers(user) : VisibleCustomers(user).Where(c => c.ErpId == customerId);
 
     public IReadOnlyList<OrderView> Orders(UserContext user, OrderQuery query, DateOnly today)
     {
         var text = query.Text?.Trim();
-        return _orders.Values
-            .Where(o => Visible(user, o.TenantId, o.CustomerId))
-            .Where(o => query.CustomerId is null || o.CustomerId == query.CustomerId)
+        return Scope(user, query.CustomerId)
+            .SelectMany(c => _ordersByCustomer.Get(Key(c.TenantId, c.ErpId)))
+            .Select(k => _orders.GetValueOrDefault(k)).OfType<Order>()
             .Select(o => View(o, today))
             .Where(v => query.Status is null || v.Status == query.Status)
             .Where(v => string.IsNullOrEmpty(text)
@@ -101,8 +149,9 @@ public sealed class InMemoryPortalStore : IPortalStore
         _orders.TryGetValue(Key(tenantId, orderId), out var o) && Visible(user, o.TenantId, o.CustomerId) ? View(o, today) : null;
 
     public IReadOnlyList<InvoiceView> Invoices(UserContext user, InvoiceStatus? status, DateOnly today) =>
-        _invoices.Values
-            .Where(i => Visible(user, i.TenantId, i.CustomerId))
+        Scope(user, null)
+            .SelectMany(c => _invoicesByCustomer.Get(Key(c.TenantId, c.ErpId)))
+            .Select(k => _invoices.GetValueOrDefault(k)).OfType<Invoice>()
             .Select(i => InvoiceViewOf(i, today))
             .Where(v => status is null || v.Status == status)
             .OrderBy(v => v.Status == InvoiceStatus.Pagada).ThenBy(v => v.Invoice.DueDate)
@@ -167,14 +216,17 @@ public sealed class InMemoryPortalStore : IPortalStore
     private OrderView View(Order o, DateOnly today)
     {
         _customers.TryGetValue(Key(o.TenantId, o.CustomerId), out var customer);
-        var deliveries = _deliveries.Values.Where(d => d.TenantId == o.TenantId && d.OrderId == o.ErpId)
+        var orderKey = Key(o.TenantId, o.ErpId);
+        var deliveries = _deliveriesByOrder.Get(orderKey).Select(k => _deliveries.GetValueOrDefault(k)).OfType<Delivery>()
+            .OrderBy(d => d.ErpId)
             .Select(d =>
             {
                 TrackingUpdate? t = null;
                 if (d.TrackingNumber is not null) _tracking.TryGetValue(Key(d.TenantId, d.TrackingNumber), out t);
                 return new DeliveryView(d, t?.Events ?? [], t?.Delivered ?? false);
             }).ToList();
-        var invoices = _invoices.Values.Where(i => i.TenantId == o.TenantId && i.OrderId == o.ErpId).Select(i => InvoiceViewOf(i, today)).ToList();
+        var invoices = _invoicesByOrder.Get(orderKey).Select(k => _invoices.GetValueOrDefault(k)).OfType<Invoice>()
+            .OrderBy(i => i.ErpId).Select(i => InvoiceViewOf(i, today)).ToList();
 
         // SAP marca el pedido como enviado al contabilizar la salida de mercancías;
         // "Entregado" llega del seguimiento del transportista.
@@ -188,5 +240,20 @@ public sealed class InMemoryPortalStore : IPortalStore
     {
         _payments.TryGetValue(Key(i.TenantId, i.ErpId), out var p);
         return new InvoiceView(i, InvoiceRules.StatusOf(i, p, today), p is { Cleared: true } ? p.ClearedDate : null);
+    }
+
+    /// <summary>Índice de grupo a elementos (p. ej. cliente → claves de sus pedidos). Mover un elemento lo saca de su grupo anterior.</summary>
+    private sealed class GroupIndex
+    {
+        private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _groups = new();
+
+        public void Move(string? from, string? to, string item)
+        {
+            if (from == to && to is not null && _groups.TryGetValue(to, out var same) && same.ContainsKey(item)) return;
+            if (from is not null && _groups.TryGetValue(from, out var old)) old.TryRemove(item, out _);
+            if (to is not null) _groups.GetOrAdd(to, _ => new()).TryAdd(item, 0);
+        }
+
+        public IEnumerable<string> Get(string group) => _groups.TryGetValue(group, out var items) ? items.Keys : [];
     }
 }
