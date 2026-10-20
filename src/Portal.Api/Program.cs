@@ -11,6 +11,16 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IPortalStore, InMemoryPortalStore>();
 builder.Services.AddScoped<CurrentUser>();
+// Reglas, objetivos y liquidaciones de comisiones (datos propios del portal). La sección Commissions:Seed da los datos iniciales.
+var commissionSeed = builder.Configuration.GetSection("Commissions:Seed").Get<CommissionSeed>() ?? new() { TenantId = "" };
+builder.Services.AddSingleton(commissionSeed);
+builder.Services.AddSingleton<ICommissionStore>(sp =>
+{
+    var store = new InMemoryCommissionStore();
+    if (commissionSeed.TenantId != "") commissionSeed.ApplyTo(store, sp.GetRequiredService<TimeProvider>().GetLocalNow().Year);
+    return store;
+});
+if (commissionSeed.PaidThroughMonth > 0) builder.Services.AddHostedService<DemoSettlementSeeder>();
 
 // Conector activo: "SapFiles" hoy, "SapRfc" cuando se instale SAP .NET Connector.
 var connector = builder.Configuration.GetValue("Erp:Connector", "SapFiles");
@@ -122,6 +132,8 @@ api.MapGet("/order-requests", (CurrentUser cu, IPortalStore store, string? custo
 
 api.MapGet("/order-requests/{tenant}/{id}", (string tenant, string id, CurrentUser cu, IPortalStore store) =>
     store.Request(cu.Get()!, tenant, id) is { } r ? Results.Ok(r) : Results.NotFound());
+
+api.MapCommissions();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 

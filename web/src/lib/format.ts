@@ -13,7 +13,7 @@ export function fecha(d: string | null | undefined): string {
   return `${String(day).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 
-const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"];
+export const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"];
 export function fechaCorta(d: string | null | undefined): string {
   if (!d) return "";
   const [, m, day] = parts(d);
@@ -76,3 +76,11 @@ export function diaLaborable(dias: number, desde = new Date()): string {
   }
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+export const MESES_LARGOS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+const pctFmt = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
+export const porcentaje = (n: number | null | undefined) => (n == null ? "" : `${pctFmt.format(n)} %`);
+
+/** Importe sin decimales, para gráficos y totales grandes. */
+export const eurRedondo = (n: number) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });

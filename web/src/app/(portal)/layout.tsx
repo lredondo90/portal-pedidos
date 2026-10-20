@@ -22,6 +22,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/">) {
     { href: "/entregas", label: "Entregas" },
     { href: "/facturas", label: "Facturas y pagos" },
     role === "Customer" ? { href: "/cuenta", label: "Mi cuenta" } : { href: "/clientes", label: "Clientes" },
+    ...(role !== "Customer" ? [{ href: "/ventas", label: "Ventas y comisiones" }] : []),
     ...(isAdmin(role) ? [{ href: "/sincronizacion", label: "Sincronización" }] : []),
   ];
   const name = me.name ?? me.user.userId;

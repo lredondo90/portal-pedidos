@@ -31,6 +31,8 @@ public interface IPortalStore
     IReadOnlyList<OrderRequest> Requests(UserContext user, string? customerId = null);
     OrderRequest? Request(UserContext user, string tenantId, string requestId);
     StoreCounts Counts();
+    IReadOnlyList<SalesRep> SalesReps(UserContext user);
+    IReadOnlyList<SaleView> Sales(UserContext user, DateOnly today);
 }
 
 public sealed record StoreCounts(int Customers, int Orders, int Deliveries, int Invoices);
@@ -204,6 +206,29 @@ public sealed class InMemoryPortalStore : IPortalStore
         _requests.TryGetValue(Key(tenantId, requestId), out var r) && Visible(user, r.TenantId, r.CustomerId) ? r : null;
 
     public StoreCounts Counts() => new(_customers.Count, _orders.Count, _deliveries.Count, _invoices.Count);
+
+    /// <summary>Comerciales que puede ver el usuario: todos para administración, el propio (y su equipo) para un comercial.</summary>
+    public IReadOnlyList<SalesRep> SalesReps(UserContext user) =>
+        _reps.Values
+            .Where(r => AccessPolicy.CanSeeTenant(user, r.TenantId))
+            .Where(r => AccessPolicy.IsAdmin(user)
+                || (user.Role is Role.SalesRep or Role.SalesManager && r.ErpId == user.SalesRepId)
+                || (user.Role == Role.SalesManager && (user.TeamSalesRepIds?.Contains(r.ErpId) ?? false)))
+            .OrderBy(r => r.Name)
+            .ToList();
+
+    public IReadOnlyList<SaleView> Sales(UserContext user, DateOnly today) =>
+        Scope(user, null)
+            .SelectMany(c => _invoicesByCustomer.Get(Key(c.TenantId, c.ErpId)).Select(k => _invoices.GetValueOrDefault(k)).OfType<Invoice>().Select(i => (c, i)))
+            .Select(x =>
+            {
+                var view = InvoiceViewOf(x.i, today);
+                var lines = x.i.OrderId is not null && _orders.TryGetValue(Key(x.i.TenantId, x.i.OrderId), out var o)
+                    ? o.Lines.Select(l => (_products.GetValueOrDefault(Key(o.TenantId, l.MaterialId))?.Category, l.NetAmount)).ToList()
+                    : [];
+                return new SaleView(x.i, x.c, view.Status, view.PaidDate, CommissionCalculator.Split(x.i.NetAmount, lines));
+            })
+            .ToList();
 
     private CatalogItem ItemFor(Customer customer, Product p) =>
         _prices.TryGetValue(Key(p.TenantId, customer.ErpId + "|" + p.ErpId), out var special)

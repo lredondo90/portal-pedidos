@@ -162,6 +162,31 @@ export interface OrderRequest {
   total: number;
 }
 
+// Ventas y comisiones: las ventas salen de SAP; reglas, objetivos y liquidaciones son datos propios del portal.
+
+export type CommissionBasis = "Cobrado" | "Facturado";
+export interface SalesRep { tenantId: string; erpId: string; name: string; email?: string | null }
+export interface CommissionSettings { tenantId: string; basis: CommissionBasis; defaultRate: number; bonusRate: number }
+export interface CommissionRule {
+  tenantId: string;
+  id: string;
+  salesRepId?: string | null;
+  customerId?: string | null;
+  category?: string | null;
+  rate: number;
+  validFrom?: string | null;
+  validTo?: string | null;
+  note?: string | null;
+}
+export interface SalesTarget { tenantId: string; salesRepId: string; year: number; month: number; amount: number }
+export interface CommissionSettlement { tenantId: string; salesRepId: string; year: number; month: number; base: number; commission: number; closedAt: string; closedBy: string; paidAt?: string | null }
+export interface MonthFigures { month: number; invoiced: number; collected: number; base: number; commission: number; bonus: number; target?: number | null; settlement?: CommissionSettlement | null; total: number }
+export interface RepSales { salesRepId: string; name: string; months: MonthFigures[]; invoiced: number; collected: number; commission: number; target?: number | null; pendingCollection: number; overdue: number }
+export interface Ranked { id: string; name: string; amount: number }
+export interface CommissionLine { salesRepId: string; invoiceId: string; customerId: string; customerName: string; category?: string | null; date: string; base: number; rate: number; commission: number }
+export interface SalesDashboard { year: number; basis: CommissionBasis; reps: RepSales[]; months: MonthFigures[]; topCustomers: Ranked[]; categories: Ranked[]; lines: CommissionLine[] }
+export interface CommissionConfig { settings: CommissionSettings; rules: CommissionRule[]; targets: SalesTarget[]; salesReps: SalesRep[]; customers: Customer[]; categories: string[] }
+
 export async function currentUserId(): Promise<string | null> {
   return (await cookies()).get(USER_COOKIE)?.value ?? null;
 }
@@ -188,8 +213,8 @@ export async function apiPost<T>(path: string): Promise<T | null> {
 }
 
 /** Envía JSON a la API y devuelve el código y el cuerpo, también en los errores (400 trae { errors }). */
-export async function apiSend<T>(method: "POST" | "PUT", path: string, body: unknown): Promise<{ status: number; data: T | null }> {
-  const res = await call(path, { method, body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+export async function apiSend<T>(method: "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<{ status: number; data: T | null }> {
+  const res = await call(path, body === undefined ? { method } : { method, body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
   const text = await res.text();
   return { status: res.status, data: text ? (JSON.parse(text) as T) : null };
 }
