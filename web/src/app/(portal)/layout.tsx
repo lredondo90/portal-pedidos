@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { InstallApp } from "@/components/InstallApp";
 import { Nav } from "@/components/Nav";
 import { logout } from "@/lib/actions";
 import { apiGet, currentUserId, isAdmin, type Me } from "@/lib/api";
@@ -46,6 +47,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/">) {
               <span className="sub">{ROLE_LABEL[role]}</span>
             </span>
           </div>
+          <InstallApp />
           <form action={logout}>
             <button className="btn sm" type="submit">Cambiar de usuario</button>
           </form>
