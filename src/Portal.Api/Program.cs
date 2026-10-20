@@ -23,8 +23,10 @@ else
 {
     var files = builder.Configuration.GetSection("Erp:SapFiles").Get<SapFileOptions>() ?? new();
     files.InboxPath = Path.GetFullPath(files.InboxPath, builder.Environment.ContentRootPath);
+    files.OutboxPath = Path.GetFullPath(files.OutboxPath, builder.Environment.ContentRootPath);
     builder.Services.AddSingleton(files);
     builder.Services.AddSingleton<IErpConnector, SapFileConnector>();
+    if (files.SimulateSap) builder.Services.AddHostedService<DemoSapSimulator>();
 }
 builder.Services.AddSingleton<SyncService>();
 builder.Services.AddHostedService<SyncWorker>();
@@ -75,6 +77,51 @@ api.MapGet("/sync", async (CurrentUser cu, SyncService sync, IErpConnector erp, 
 
 api.MapPost("/sync", async (CurrentUser cu, SyncService sync, CancellationToken ct) =>
     AccessPolicy.IsAdmin(cu.Get()!) ? Results.Ok(await sync.RunAsync(ct)) : Results.StatusCode(StatusCodes.Status403Forbidden));
+
+// Pedidos desde el portal: catálogo con los precios del cliente, alta del pedido y su seguimiento hasta que SAP lo confirma.
+
+Customer? ResolveCustomer(UserContext user, IPortalStore store, string? id) =>
+    id is not null ? store.FindCustomer(user, user.TenantId, id)
+    : user.Role == Role.Customer && user.CustomerIds is { Count: 1 } ids ? store.FindCustomer(user, user.TenantId, ids.First())
+    : null;
+
+api.MapGet("/catalog", (CurrentUser cu, IPortalStore store, string? customer, string? q, string? category) =>
+{
+    var user = cu.Get()!;
+    var c = ResolveCustomer(user, store, customer);
+    if (c is null) return customer is null ? Results.Ok(new CatalogResponse(null, [], [], [])) : Results.NotFound();
+    var all = store.Catalog(c);
+    var categories = all.Select(i => i.Product.Category).OfType<string>().Distinct().Order().ToList();
+    return Results.Ok(new CatalogResponse(c, categories, store.Catalog(c, q, category), store.ShipTos(c)));
+});
+
+api.MapPost("/order-requests", async (OrderDraft draft, CurrentUser cu, IPortalStore store, IErpConnector erp, TimeProvider t, ILogger<Program> log, CancellationToken ct) =>
+{
+    var user = cu.Get()!;
+    if (store.FindCustomer(user, user.TenantId, draft.CustomerId) is not { } customer) return Results.NotFound();
+    var shipTo = draft.ShipToId is null ? null : store.ShipTos(customer).FirstOrDefault(s => s.ErpId == draft.ShipToId);
+    var draftLines = draft.Lines ?? [];
+    var (lines, errors) = OrderRules.Price(draft with { Lines = draftLines }, m => store.CatalogItem(customer, m), Today(t), draft.ShipToId is null || shipTo is not null);
+    if (errors.Count > 0) return Results.BadRequest(new { errors });
+
+    var now = t.GetUtcNow();
+    var request = new OrderRequest(customer.TenantId, OrderRequestIds.New(now), customer.ErpId, user.UserId, cu.Name(), now,
+        string.IsNullOrWhiteSpace(draft.CustomerReference) ? null : draft.CustomerReference.Trim(), draft.RequestedDate, shipTo,
+        string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(), "EUR", lines);
+    var sent = await erp.SubmitOrderAsync(request, customer, ct);
+    if (!sent.Accepted)
+    {
+        log.LogWarning("El ERP no ha aceptado el pedido {Id}: {Message}", request.Id, sent.Message);
+        return Results.Problem(sent.Message ?? "SAP no ha aceptado el pedido", statusCode: StatusCodes.Status502BadGateway);
+    }
+    store.AddRequest(request);
+    return Results.Created($"/api/order-requests/{request.TenantId}/{request.Id}", request);
+});
+
+api.MapGet("/order-requests", (CurrentUser cu, IPortalStore store, string? customer) => store.Requests(cu.Get()!, customer));
+
+api.MapGet("/order-requests/{tenant}/{id}", (string tenant, string id, CurrentUser cu, IPortalStore store) =>
+    store.Request(cu.Get()!, tenant, id) is { } r ? Results.Ok(r) : Results.NotFound());
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 

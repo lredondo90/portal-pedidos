@@ -8,7 +8,7 @@ public sealed class SapRfcOptions
     public string? AppServerHost { get; set; }
     public string? SystemNumber { get; set; }   // p. ej. "00"
     public string? Client { get; set; }         // mandante, p. ej. "100"
-    public string? User { get; set; }           // usuario técnico RFC con permisos de solo lectura
+    public string? User { get; set; }           // usuario técnico RFC (lectura, y alta de pedidos si se usan pedidos desde el portal)
     public string? Password { get; set; }
     public string Language { get; set; } = "ES";
 }
@@ -26,6 +26,9 @@ public sealed class SapRfcOptions
 ///   Facturas   → BAPI_BILLINGDOC_GETDETAIL / BAPI_BILLINGDOC_GETLIST
 ///   Cobros     → BAPI_AR_ACC_GETOPENITEMS y BAPI_AR_ACC_GETSTATEMENT
 ///   PDF        → función Z que devuelve el formulario Smartforms/SAPscript en OTF convertido a PDF
+///   Alta pedido→ BAPI_SALESDOCUMENT_CREATEFROMDAT2 (antes, BAPI_SALESORDER_SIMULATE para enseñar precio y disponibilidad
+///                exactos) + BAPI_TRANSACTION_COMMIT; el VBELN devuelto se convierte en OrderConfirmation al momento.
+///                Necesita un usuario RFC con permiso de creación en VA01, no solo de lectura.
 /// </summary>
 public sealed class SapRfcConnector(SapRfcOptions options) : IErpConnector
 {
@@ -39,6 +42,9 @@ public sealed class SapRfcConnector(SapRfcOptions options) : IErpConnector
     public Task<ErpBatch?> RefreshOrderAsync(string tenantId, string orderId, CancellationToken ct) => Task.FromResult<ErpBatch?>(null);
 
     public Task<Stream?> OpenDocumentAsync(string tenantId, DocumentKind kind, string erpId, string? fileName, CancellationToken ct) => Task.FromResult<Stream?>(null);
+
+    public Task<OrderSubmission> SubmitOrderAsync(OrderRequest request, Customer customer, CancellationToken ct) =>
+        Task.FromResult(new OrderSubmission(false, "El conector RFC/BAPI aún no está activado."));
 
     public Task<ConnectorHealth> CheckHealthAsync(CancellationToken ct) =>
         Task.FromResult(new ConnectorHealth(false, Configured ? "Pendiente de instalar SAP .NET Connector" : "Sin configurar", DateTimeOffset.UtcNow));

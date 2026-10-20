@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Nav } from "@/components/Nav";
 import { logout } from "@/lib/actions";
 import { apiGet, currentUserId, isAdmin, type Me } from "@/lib/api";
+import { cartCount, readCart } from "@/lib/cart";
 
 const ROLE_LABEL = { Customer: "Cliente", SalesRep: "Comercial", SalesManager: "Jefe de ventas", CompanyAdmin: "Administración", PlatformAdmin: "Plataforma" };
 
@@ -10,10 +11,13 @@ export default async function PortalLayout({ children }: LayoutProps<"/">) {
   const me = await apiGet<Me>("/api/me");
   if (!me?.user) redirect("/login");
   const role = me.user.role;
+  const inCart = cartCount(await readCart());
 
   const items = [
     { href: "/", label: "Resumen" },
     { href: "/pedidos", label: "Pedidos" },
+    { href: "/catalogo", label: "Hacer pedido" },
+    ...(inCart > 0 ? [{ href: "/carrito", label: "Carrito", count: inCart }] : []),
     { href: "/entregas", label: "Entregas" },
     { href: "/facturas", label: "Facturas y pagos" },
     role === "Customer" ? { href: "/cuenta", label: "Mi cuenta" } : { href: "/clientes", label: "Clientes" },

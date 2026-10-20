@@ -162,3 +162,11 @@ a.chip,a.btn{text-decoration:none}
 .detail{display:flex;flex-direction:column;gap:16px;max-width:860px}
 @media (min-width:981px){.kpis.three{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:760px){.app{grid-template-rows:auto 1fr}.nav a{white-space:nowrap}}
+/* Pedidos desde el portal */
+.qty-form{display:flex;gap:6px;align-items:center}
+.qty{width:84px;padding:5px 8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);text-align:right}
+.field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--ink-2)}
+.field input,.field select,.field textarea{padding:8px;border:1px solid var(--line);border-radius:7px;background:var(--surface);color:var(--ink);width:100%}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.banner.bad{border-style:solid;border-color:var(--bad);color:var(--bad)}
+@media (max-width:760px){.qty-form{flex-wrap:wrap}.qty{width:64px}}

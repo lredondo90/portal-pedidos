@@ -45,6 +45,9 @@ curl -H "X-Demo-User: marta" http://localhost:5103/api/sync
 | GET | `/api/deliveries?customer=` | Entregas visibles con su último evento de seguimiento |
 | GET | `/api/invoices?status=` | Facturas con estado Pendiente, Vencida o Pagada |
 | GET | `/api/documents/{empresa}/{Invoice\|DeliveryNote}/{id}` | PDF de factura o albarán |
+| GET | `/api/catalog?customer=&q=&category=` | Catálogo con los precios del cliente y sus direcciones de entrega |
+| POST | `/api/order-requests` | Hacer un pedido: cliente, referencia, fecha, dirección y líneas (artículo y cantidad). Los precios los calcula la API |
+| GET | `/api/order-requests?customer=` | Pedidos hechos en el portal y su estado (pendiente de SAP, creado o rechazado) |
 | GET / POST | `/api/sync` | Estado de la conexión con el ERP / sincronizar ahora (solo administración) |
 
 ## Cambiar de ficheros a RFC/BAPI
@@ -54,6 +57,15 @@ curl -H "X-Demo-User: marta" http://localhost:5103/api/sync
 3. Poner `Erp:Connector = SapRfc` y los datos de conexión en `Erp:SapRfc`.
 
 El resto del portal no cambia: los dos conectores devuelven el mismo modelo común.
+
+## Pedidos desde el portal
+
+El cliente (o su comercial) elige artículos del catálogo, los añade al carrito y envía el pedido.
+La API calcula precios e IVA con la tarifa del cliente y deja el fichero `PEDIDO_ENTRADA_<id>.csv` en `Erp:SapFiles:OutboxPath`.
+Un programa ABAP lo convierte en pedido de venta y responde con un fichero `CONFIRMACIONES` (formato en `docs/formato-ficheros-sap.md`).
+
+En local y en la demo está activado un SAP simulado (`Erp:SapFiles:SimulateSap = true`) que crea el pedido a los pocos segundos.
+Escribe sus ficheros en la carpeta de ejemplos con segundos en el nombre (no se suben a git); bórralos para volver a los datos iniciales.
 
 ## Próximos pasos
 

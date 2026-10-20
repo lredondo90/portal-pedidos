@@ -88,10 +88,14 @@ public sealed record ErpBatch(
     IReadOnlyList<TrackingUpdate> Tracking,
     IReadOnlyList<Invoice> Invoices,
     IReadOnlyList<PaymentUpdate> Payments,
+    IReadOnlyList<Product> Products,
+    IReadOnlyList<CustomerPrice> Prices,
+    IReadOnlyList<ShipTo> ShipTos,
+    IReadOnlyList<OrderConfirmation> Confirmations,
     IReadOnlyList<ImportIssue> Issues,
     string? Cursor)
 {
-    public static ErpBatch Empty(string? cursor = null) => new([], [], [], [], [], [], [], [], cursor);
+    public static ErpBatch Empty(string? cursor = null) => new([], [], [], [], [], [], [], [], [], [], [], [], cursor);
 }
 
 public sealed record ImportIssue(string Source, int? Row, string Message);

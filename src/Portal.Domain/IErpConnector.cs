@@ -21,5 +21,11 @@ public interface IErpConnector
     /// <summary>PDF de factura o albarán, o null si no existe.</summary>
     Task<Stream?> OpenDocumentAsync(string tenantId, DocumentKind kind, string erpId, string? fileName, CancellationToken ct);
 
+    /// <summary>
+    /// Entrega al ERP un pedido hecho en el portal. Accepted indica que el ERP lo ha recibido;
+    /// el número de pedido llega después como OrderConfirmation en un lote de cambios.
+    /// </summary>
+    Task<OrderSubmission> SubmitOrderAsync(OrderRequest request, Customer customer, CancellationToken ct);
+
     Task<ConnectorHealth> CheckHealthAsync(CancellationToken ct);
 }
