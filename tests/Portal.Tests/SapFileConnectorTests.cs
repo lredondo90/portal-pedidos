@@ -31,11 +31,12 @@ public class SapFileConnectorTests
     public async Task Imports_all_sample_files()
     {
         var (batch, _) = await LoadSamples();
-        Assert.Equal(3, batch.Customers.Count);
+        // Los ejemplos incluyen el histórico de ventas de 2026 (ficheros *_20260101_* y *_20261015_*) para el dashboard.
+        Assert.Equal(5, batch.Customers.Count);
         Assert.Equal(2, batch.SalesReps.Count);
-        Assert.Equal(8, batch.Orders.Count);
+        Assert.Equal(8 + 77, batch.Orders.Count);
         Assert.Equal(4, batch.Deliveries.Count);
-        Assert.Equal(3, batch.Invoices.Count);
+        Assert.Equal(3 + 77, batch.Invoices.Count);
         Assert.Equal("20261019_1400", batch.Cursor);
     }
 
@@ -46,7 +47,8 @@ public class SapFileConnectorTests
         var issue = Assert.Single(batch.Issues);
         Assert.Equal("COBROS_20261019_1400.csv", issue.Source);
         Assert.Equal(3, issue.Row);
-        Assert.Single(batch.Payments);
+        Assert.Contains(batch.Payments, p => p.InvoiceId == "0090034089");
+        Assert.DoesNotContain(batch.Payments, p => p.InvoiceId == "0090034100");
     }
 
     [Fact]
@@ -74,7 +76,7 @@ public class SapFileConnectorTests
     {
         var (_, store) = await LoadSamples();
         var orders = store.Orders(Ana, new OrderQuery(), Today);
-        Assert.Equal(4, orders.Count);
+        Assert.Equal(4 + 22, orders.Count);
         Assert.All(orders, o => Assert.Equal("0000100231", o.Order.CustomerId));
         Assert.Null(store.Order(Ana, "demo", "0000125490", Today)); // pedido de otro cliente
     }
@@ -83,9 +85,9 @@ public class SapFileConnectorTests
     public async Task Sales_rep_sees_only_their_portfolio()
     {
         var (_, store) = await LoadSamples();
-        Assert.Equal(["0000100231", "0000100488"], store.Customers(Laura).Select(c => c.ErpId));
+        Assert.Equal(["0000100812", "0000100231", "0000100488"], store.Customers(Laura).Select(c => c.ErpId));
         Assert.DoesNotContain(store.Orders(Laura, new OrderQuery(), Today), o => o.Order.CustomerId == "0000100679");
-        Assert.Equal(8, store.Orders(Admin, new OrderQuery(), Today).Count);
+        Assert.Equal(8 + 77, store.Orders(Admin, new OrderQuery(), Today).Count);
     }
 
     [Fact]

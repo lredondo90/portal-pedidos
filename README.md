@@ -67,6 +67,20 @@ Un programa ABAP lo convierte en pedido de venta y responde con un fichero `CONF
 En local y en la demo está activado un SAP simulado (`Erp:SapFiles:SimulateSap = true`) que crea el pedido a los pocos segundos.
 Escribe sus ficheros en la carpeta de ejemplos con segundos en el nombre (no se suben a git); bórralos para volver a los datos iniciales.
 
+## Ventas y comisiones
+
+Página «Ventas y comisiones» para comerciales (solo lo suyo) y administración (todos, con filtro por comercial).
+Las ventas salen de las facturas y cobros de SAP; las reglas de comisión, los objetivos y las liquidaciones son datos propios
+del portal (tablas `commission_*` y `sales_target` en `db/schema.sql`) y se gestionan en «Reglas y objetivos».
+
+- Comisión sobre lo cobrado (fecha de cobro) o lo facturado (fecha de factura), a elegir.
+- Porcentaje por comercial, familia de artículo o cliente, con vigencia opcional. Gana la regla más concreta: cliente > familia > comercial > general.
+- Objetivo mensual por comercial y % extra sobre lo que lo supere.
+- Liquidar un mes congela su comisión; después se marca como pagada.
+
+Los datos iniciales de la demo están en `Commissions:Seed` (appsettings) y el histórico de ventas de 2026 en los ficheros `*_20260101_*` y `*_20261015_*`
+de `samples/sap-export`. Mientras el almacén sea en memoria, los cambios en reglas y liquidaciones se pierden al reiniciar la API.
+
 ## Próximos pasos
 
 - Almacén PostgreSQL (sustituye al almacén en memoria) usando `db/schema.sql`.

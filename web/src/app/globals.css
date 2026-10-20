@@ -170,3 +170,21 @@ a.chip,a.btn{text-decoration:none}
 .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .banner.bad{border-style:solid;border-color:var(--bad);color:var(--bad)}
 @media (max-width:760px){.qty-form{flex-wrap:wrap}.qty{width:64px}}
+/* Ventas y comisiones */
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart .tick{fill:var(--ink-3);font-size:11px;font-family:var(--f-body)}
+.chart .grid-line{stroke:var(--line);stroke-width:1}
+.chart .axis{stroke:var(--ink-3);stroke-width:1}
+.chart .bar path{fill:var(--accent);opacity:.55;transition:opacity .15s}
+.chart .bar.on path,.chart .bar:hover path{opacity:1}
+.chart .bar .hit{fill:transparent}
+.chart .bar:focus-visible{outline:none}
+.chart .bar:focus-visible .hit{fill:var(--surface-2)}
+.chart .target{stroke:var(--ink);stroke-width:2;stroke-dasharray:4 3;stroke-linecap:round}
+.chart-legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);margin-bottom:8px}
+.chart-legend span{display:inline-flex;align-items:center;gap:6px}
+.sw-bar{width:10px;height:10px;border-radius:2px;background:var(--accent);display:inline-block}
+.sw-target{width:16px;border-top:2px dashed var(--ink);display:inline-block}
+/* En móvil el gráfico no se encoge por debajo de un tamaño legible: se desplaza en horizontal. */
+.chart-wrap{overflow-x:auto}
+@media (max-width:760px){.chart-wrap .chart{min-width:560px}}

@@ -219,6 +219,63 @@ CREATE TABLE sync_run (
     error       text
 );
 
+-- Comisiones: datos propios del portal (no vienen de SAP). Las ventas salen de invoice y order_line.
+
+CREATE TYPE commission_basis AS ENUM ('Cobrado', 'Facturado');
+
+CREATE TABLE commission_settings (
+    tenant_id     text PRIMARY KEY REFERENCES tenant(id),
+    basis         commission_basis NOT NULL DEFAULT 'Cobrado',
+    default_rate  numeric(5,2) NOT NULL DEFAULT 0,     -- % cuando ninguna regla encaja
+    bonus_rate    numeric(5,2) NOT NULL DEFAULT 0      -- % extra sobre lo que supera el objetivo del mes
+);
+
+-- Columnas vacías = vale para todos. Gana la regla más concreta: cliente > familia > comercial.
+CREATE TABLE commission_rule (
+    tenant_id     text NOT NULL REFERENCES tenant(id),
+    id            text NOT NULL,
+    sales_rep_id  text,
+    customer_id   text,
+    category      text,                                -- familia de artículo (product.category)
+    rate          numeric(5,2) NOT NULL CHECK (rate BETWEEN 0 AND 100),
+    valid_from    date,
+    valid_to      date,
+    note          text,
+    PRIMARY KEY (tenant_id, id),
+    FOREIGN KEY (tenant_id, sales_rep_id) REFERENCES sales_rep(tenant_id, erp_id),
+    FOREIGN KEY (tenant_id, customer_id) REFERENCES customer(tenant_id, erp_id),
+    CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from)
+);
+
+CREATE TABLE sales_target (
+    tenant_id     text NOT NULL,
+    sales_rep_id  text NOT NULL,
+    year          smallint NOT NULL,
+    month         smallint NOT NULL CHECK (month BETWEEN 1 AND 12),
+    amount        numeric(15,2) NOT NULL CHECK (amount >= 0),
+    PRIMARY KEY (tenant_id, sales_rep_id, year, month),
+    FOREIGN KEY (tenant_id, sales_rep_id) REFERENCES sales_rep(tenant_id, erp_id)
+);
+
+-- Mes cerrado: la base y la comisión quedan congeladas aunque cambien reglas o lleguen abonos.
+CREATE TABLE commission_settlement (
+    tenant_id     text NOT NULL,
+    sales_rep_id  text NOT NULL,
+    year          smallint NOT NULL,
+    month         smallint NOT NULL CHECK (month BETWEEN 1 AND 12),
+    base_amount   numeric(15,2) NOT NULL,
+    commission    numeric(15,2) NOT NULL,
+    lines         jsonb NOT NULL DEFAULT '[]',         -- detalle por factura en el momento del cierre
+    closed_at     timestamptz NOT NULL DEFAULT now(),
+    closed_by     text NOT NULL,
+    paid_at       timestamptz,
+    PRIMARY KEY (tenant_id, sales_rep_id, year, month),
+    FOREIGN KEY (tenant_id, sales_rep_id) REFERENCES sales_rep(tenant_id, erp_id)
+);
+-- Ventas del año por fecha de factura y de cobro (base del dashboard).
+CREATE INDEX invoice_date ON invoice (tenant_id, invoice_date);
+CREATE INDEX invoice_paid ON invoice (tenant_id, paid_date) WHERE paid_date IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
 -- Seguridad a nivel de fila
 -- ---------------------------------------------------------------------------
@@ -250,6 +307,10 @@ ALTER TABLE invoice     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_price ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ship_to        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_request  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_settings   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_rule       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sales_target          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE commission_settlement ENABLE ROW LEVEL SECURITY;
 
 -- La función se ejecuta con los permisos de su dueño para poder leer customer sin recursión de políticas.
 ALTER FUNCTION app_can_see_customer(text, text) SECURITY DEFINER;
@@ -261,6 +322,33 @@ CREATE POLICY order_line_scope  ON order_line  USING (EXISTS (SELECT 1 FROM sale
 CREATE POLICY price_scope       ON customer_price USING (app_can_see_customer(tenant_id, customer_id));
 CREATE POLICY ship_to_scope     ON ship_to        USING (app_can_see_customer(tenant_id, customer_id));
 CREATE POLICY request_scope     ON order_request  USING (app_can_see_customer(tenant_id, customer_id));
+-- Comisiones: administración lo gestiona todo; cada comercial (o jefe de ventas, su equipo) solo lee lo suyo.
+CREATE FUNCTION app_can_see_rep(p_tenant text, p_rep text) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER AS $$
+    SELECT CASE current_setting('app.role', true)
+        WHEN 'PlatformAdmin' THEN true
+        WHEN 'CompanyAdmin'  THEN p_tenant = current_setting('app.tenant_id', true)
+        WHEN 'SalesManager'  THEN p_tenant = current_setting('app.tenant_id', true) AND (p_rep IS NULL OR EXISTS (
+            SELECT 1 FROM sales_rep r WHERE r.tenant_id = p_tenant AND r.erp_id = p_rep
+              AND current_setting('app.sales_rep_id', true) IN (r.erp_id, r.manager_id)))
+        WHEN 'SalesRep'      THEN p_tenant = current_setting('app.tenant_id', true)
+            AND (p_rep IS NULL OR p_rep = current_setting('app.sales_rep_id', true))
+        ELSE false
+    END
+$$;
+CREATE FUNCTION app_is_admin(p_tenant text) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+    SELECT current_setting('app.role', true) = 'PlatformAdmin'
+        OR (current_setting('app.role', true) = 'CompanyAdmin' AND p_tenant = current_setting('app.tenant_id', true))
+$$;
+CREATE POLICY settings_read    ON commission_settings   FOR SELECT USING (app_can_see_rep(tenant_id, NULL));
+CREATE POLICY settings_admin   ON commission_settings   USING (app_is_admin(tenant_id));
+CREATE POLICY rule_read        ON commission_rule       FOR SELECT USING (app_can_see_rep(tenant_id, sales_rep_id));
+CREATE POLICY rule_admin       ON commission_rule       USING (app_is_admin(tenant_id));
+CREATE POLICY target_read      ON sales_target          FOR SELECT USING (app_can_see_rep(tenant_id, sales_rep_id));
+CREATE POLICY target_admin     ON sales_target          USING (app_is_admin(tenant_id));
+CREATE POLICY settlement_read  ON commission_settlement FOR SELECT USING (app_can_see_rep(tenant_id, sales_rep_id));
+CREATE POLICY settlement_admin ON commission_settlement USING (app_is_admin(tenant_id));
 CREATE POLICY delivery_scope    ON delivery    USING (EXISTS (SELECT 1 FROM sales_order o WHERE o.tenant_id = delivery.tenant_id AND o.erp_id = delivery.order_id));
 
 -- Rol con el que se conecta la API web (solo lectura sobre datos del ERP; la importación usa otro rol).
@@ -268,3 +356,4 @@ CREATE ROLE portal_api NOLOGIN;
 GRANT SELECT ON customer, sales_order, order_line, delivery, tracking_event, invoice, sales_rep, product, customer_price, ship_to TO portal_api;
 GRANT SELECT, INSERT ON order_request TO portal_api;
 GRANT SELECT, INSERT, UPDATE ON incident, app_user TO portal_api;
+GRANT SELECT, INSERT, UPDATE, DELETE ON commission_settings, commission_rule, sales_target, commission_settlement TO portal_api;
