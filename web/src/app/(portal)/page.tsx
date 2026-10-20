@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { OrdersTable } from "@/components/OrdersTable";
 import { OrderPill, PageHeader } from "@/components/Pills";
 import { apiGet, isStaff, type Customer, type InvoiceView, type Me, type OrderSummary } from "@/lib/api";
@@ -26,6 +27,7 @@ export default async function ResumenPage() {
 
   return (
     <>
+      <AutoRefresh />
       <PageHeader title={staff ? "Visión general" : `Hola, ${me!.name?.split(" ")[0] ?? ""}`} sub={sub} />
       <div className="grid kpis">
         <div className="kpi"><span className="label">Pedidos abiertos</span><span className="v num">{open.length}</span><span className="s">{eur(open.reduce((s, o) => s + o.total, 0))}</span></div>

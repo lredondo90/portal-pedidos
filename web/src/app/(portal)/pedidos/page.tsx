@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { OrdersTable } from "@/components/OrdersTable";
 import { PageHeader, RequestPill } from "@/components/Pills";
 import { apiGet, isStaff, type Customer, type Me, type OrderRequest, type OrderStatus, type OrderSummary } from "@/lib/api";
@@ -39,6 +40,7 @@ export default async function PedidosPage({ searchParams }: PageProps<"/pedidos"
 
   return (
     <>
+      <AutoRefresh />
       <PageHeader title="Pedidos" sub={`Pedidos de venta${staff ? " de tus clientes" : ""}, con su estado en SAP`}>
         <Link className="btn primary" href={customer ? `/catalogo?cliente=${customer}` : "/catalogo"}>Hacer un pedido</Link>
       </PageHeader>
