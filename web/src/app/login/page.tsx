@@ -1,3 +1,4 @@
+import { InstallApp } from "@/components/InstallApp";
 import { loginDemo } from "@/lib/actions";
 
 const USERS = [
@@ -35,6 +36,7 @@ export default function LoginPage() {
             ))}
           </form>
         </section>
+        <InstallApp />
         <p className="sub">Usuarios de ejemplo. En producción se entrará con correo y contraseña o con la cuenta corporativa.</p>
       </div>
     </main>

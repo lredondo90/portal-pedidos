@@ -81,6 +81,22 @@ del portal (tablas `commission_*` y `sales_target` en `db/schema.sql`) y se gest
 Los datos iniciales de la demo están en `Commissions:Seed` (appsettings) y el histórico de ventas de 2026 en los ficheros `*_20260101_*` y `*_20261015_*`
 de `samples/sap-export`. Mientras el almacén sea en memoria, los cambios en reglas y liquidaciones se pierden al reiniciar la API.
 
+## App en el móvil y Google Play
+
+La web es una app instalable (PWA): `web/src/app/manifest.ts`, iconos en `web/public` y un service worker (`web/public/sw.js`)
+que solo guarda los ficheros estáticos y la página `offline.html`; los datos de clientes nunca se guardan en el móvil.
+En Android y en el ordenador aparece el botón «Instalar la app»; en iPhone se indica Compartir → «Añadir a pantalla de inicio».
+
+Para publicarla en Google Play se empaqueta como Trusted Web Activity, sin código Android propio:
+
+1. Crear la cuenta de desarrollador en Google Play Console (pago único de 25 $).
+2. En https://www.pwabuilder.com escribir la dirección del portal y generar el paquete Android (id propuesto: `es.portalpedidos.app`).
+3. Subir el `.aab` a Play Console. En «Integridad de la app» copiar la huella SHA-256 de la firma.
+4. Poner en la app web `ANDROID_PACKAGE` y `ANDROID_SHA256` (varias huellas separadas por comas, incluida la de la clave de subida).
+   `/.well-known/assetlinks.json` las publica y la app abre a pantalla completa, sin barra del navegador.
+
+Las cuentas personales nuevas deben pasar una prueba cerrada con 12 personas durante 14 días antes de publicar; las de empresa no.
+
 ## Próximos pasos
 
 - Almacén PostgreSQL (sustituye al almacén en memoria) usando `db/schema.sql`.

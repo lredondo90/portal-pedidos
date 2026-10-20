@@ -188,3 +188,4 @@ a.chip,a.btn{text-decoration:none}
 /* En móvil el gráfico no se encoge por debajo de un tamaño legible: se desplaza en horizontal. */
 .chart-wrap{overflow-x:auto}
 @media (max-width:760px){.chart-wrap .chart{min-width:560px}}
+.install-hint{margin:0;font-size:12px}
