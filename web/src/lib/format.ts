@@ -1,4 +1,4 @@
-import type { InvoiceStatus, OrderStatus } from "./api";
+import type { InvoiceStatus, OrderRequestStatus, OrderStatus } from "./api";
 
 const eurFmt = new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" });
 export const eur = (n: number | null | undefined) => (n == null ? "" : eurFmt.format(n));
@@ -54,3 +54,25 @@ export const ORDER_PILL: Record<OrderStatus, string> = {
 };
 
 export const INVOICE_PILL: Record<InvoiceStatus, string> = { Pendiente: "p-prep", Vencida: "p-bad", Pagada: "p-done" };
+
+export const REQUEST_LABEL: Record<OrderRequestStatus, string> = { PendienteErp: "Pendiente de SAP", Creado: "Creado en SAP", Rechazado: "Rechazado" };
+export const REQUEST_PILL: Record<OrderRequestStatus, string> = { PendienteErp: "p-prep", Creado: "p-done", Rechazado: "p-bad" };
+
+export const cantidad = (n: number) => Number(n).toLocaleString("es-ES", { maximumFractionDigits: 3 });
+
+export function manana(): string {
+  const n = new Date();
+  const d = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Primer día laborable a partir de mañana más `dias` laborables: fecha de entrega propuesta por defecto. */
+export function diaLaborable(dias: number, desde = new Date()): string {
+  const d = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate());
+  let n = 0;
+  while (n < dias) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) n++;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}

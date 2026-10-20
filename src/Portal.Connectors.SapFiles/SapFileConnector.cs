@@ -12,6 +12,15 @@ public sealed class SapFileOptions
 
     /// <summary>Carpeta donde el job de SAP deja los CSV. Los PDF van en la subcarpeta "pdf".</summary>
     public string InboxPath { get; set; } = "inbox";
+
+    /// <summary>Carpeta donde el portal deja los pedidos para SAP (PEDIDO_ENTRADA_*.csv).</summary>
+    public string OutboxPath { get; set; } = "outbox";
+
+    /// <summary>
+    /// Solo para la demo: un SAP simulado recoge los pedidos de la carpeta de salida y deja su confirmación
+    /// en la de entrada. Desactivar en cuanto exista el programa ABAP real.
+    /// </summary>
+    public bool SimulateSap { get; set; }
 }
 
 /// <summary>
@@ -22,10 +31,11 @@ public sealed partial class SapFileConnector(SapFileOptions options) : IErpConne
 {
     public string Name => "SAP ECC · ficheros";
 
-    [GeneratedRegex(@"^(CLIENTES|PEDIDOS|ENTREGAS|SEGUIMIENTO|FACTURAS|COBROS)_(\d{8}_\d{4})\.csv$", RegexOptions.IgnoreCase)]
+    // Marca de tiempo AAAAMMDD_HHMM, con segundos opcionales (AAAAMMDD_HHMMSS) para varios ficheros en el mismo minuto.
+    [GeneratedRegex(@"^(CLIENTES|DESTINOS|ARTICULOS|TARIFAS|PEDIDOS|ENTREGAS|SEGUIMIENTO|FACTURAS|COBROS|CONFIRMACIONES)_(\d{8}_\d{4}(?:\d{2})?)\.csv$", RegexOptions.IgnoreCase)]
     private static partial Regex FileName();
 
-    private static readonly string[] Order = ["CLIENTES", "PEDIDOS", "ENTREGAS", "SEGUIMIENTO", "FACTURAS", "COBROS"];
+    private static readonly string[] Order = ["CLIENTES", "DESTINOS", "ARTICULOS", "TARIFAS", "PEDIDOS", "ENTREGAS", "SEGUIMIENTO", "FACTURAS", "COBROS", "CONFIRMACIONES"];
 
     public Task<ErpBatch> FetchChangesAsync(string? cursor, CancellationToken ct)
     {
@@ -48,6 +58,10 @@ public sealed partial class SapFileConnector(SapFileOptions options) : IErpConne
             switch (f.kind)
             {
                 case "CLIENTES": b.Customers(table, source); break;
+                case "DESTINOS": b.ShipTos(table, source); break;
+                case "ARTICULOS": b.Products(table, source); break;
+                case "TARIFAS": b.Prices(table, source); break;
+                case "CONFIRMACIONES": b.Confirmations(table, source); break;
                 case "PEDIDOS": b.Orders(table, source); break;
                 case "ENTREGAS": b.Deliveries(table, source); break;
                 case "SEGUIMIENTO": b.Tracking(table, source); break;
@@ -66,6 +80,31 @@ public sealed partial class SapFileConnector(SapFileOptions options) : IErpConne
         var name = Path.GetFileName(fileName ?? (kind == DocumentKind.Invoice ? $"FACTURA_{erpId}.pdf" : $"ALBARAN_{erpId}.pdf"));
         var path = Path.Combine(options.InboxPath, "pdf", name);
         return Task.FromResult<Stream?>(File.Exists(path) ? File.OpenRead(path) : null);
+    }
+
+    public const string OrderFilePrefix = "PEDIDO_ENTRADA_";
+
+    /// <summary>
+    /// Escribe el pedido en la carpeta de salida, una fila por posición (formato en docs/formato-ficheros-sap.md).
+    /// Se escribe primero con extensión .tmp y luego se renombra, para que SAP nunca lea un fichero a medias.
+    /// </summary>
+    public async Task<OrderSubmission> SubmitOrderAsync(OrderRequest r, Customer customer, CancellationToken ct)
+    {
+        Directory.CreateDirectory(options.OutboxPath);
+        var path = Path.Combine(options.OutboxPath, OrderFilePrefix + r.Id + ".csv");
+        if (File.Exists(path)) return new OrderSubmission(false, $"El pedido {r.Id} ya se había enviado");
+
+        var rows = r.Lines.Select(l => new string?[]
+        {
+            r.Id, r.CustomerId, r.ShipTo?.ErpId, r.CustomerReference, Csv.Date(r.RequestedDate), r.Currency,
+            l.Position.ToString("D6", CultureInfo.InvariantCulture), l.MaterialId, Csv.Decimal(l.Quantity), l.Unit, Csv.Decimal(l.UnitPrice),
+            r.Notes, r.CreatedBy, Csv.Date(DateOnly.FromDateTime(r.CreatedAt.UtcDateTime)),
+        });
+        var text = Csv.Write(["ID_PORTAL", "KUNNR", "KUNWE", "BSTKD", "VDATU", "WAERK", "POSNR", "MATNR", "KWMENG", "VRKME", "NETPR", "TEXTO", "USUARIO", "FECHA_ALTA"], rows);
+        var tmp = path + ".tmp";
+        await File.WriteAllTextAsync(tmp, text, new UTF8Encoding(false), ct);
+        File.Move(tmp, path);
+        return new OrderSubmission(true, null);
     }
 
     public Task<ConnectorHealth> CheckHealthAsync(CancellationToken ct)
@@ -114,6 +153,34 @@ public sealed partial class SapFileConnector(SapFileOptions options) : IErpConne
                 r.Get("ORT01"), r.Get("ZTERM_TEXTO"), r.Decimal("KLIMK"), repId));
         });
 
+        private readonly List<Product> _products = [];
+        private readonly List<CustomerPrice> _prices = [];
+        private readonly List<ShipTo> _shipTos = [];
+        private readonly List<OrderConfirmation> _confirmations = [];
+
+        public void ShipTos(CsvTable t, string source) => Each(t, source, r =>
+        {
+            var addr = string.Join(", ", new[] { r.Get("STRAS"), string.Join(" ", new[] { r.Get("PSTLZ"), r.Get("ORT01") }.Where(x => x is not null)) }.Where(x => !string.IsNullOrEmpty(x)));
+            _shipTos.Add(new ShipTo(tenant, r.Required("KUNNR"), r.Required("KUNWE"), r.Get("NAME1") ?? r.Required("KUNWE"), addr));
+        });
+
+        public void Products(CsvTable t, string source) => Each(t, source, r =>
+            _products.Add(new Product(tenant, r.Required("MATNR"), r.Required("MAKTX"), r.Get("MEINS") ?? "UN", r.Get("CATEGORIA"),
+                r.RequiredDecimal("PRECIO"), r.Decimal("IVA") ?? 21m, r.Decimal("STOCK"), r.Decimal("MINIMO") ?? 1m)));
+
+        public void Prices(CsvTable t, string source) => Each(t, source, r =>
+            _prices.Add(new CustomerPrice(tenant, r.Required("KUNNR"), r.Required("MATNR"), r.RequiredDecimal("NETPR"))));
+
+        public void Confirmations(CsvTable t, string source) => Each(t, source, r =>
+        {
+            var result = r.Required("RESULTADO").ToUpperInvariant();
+            if (result is not ("OK" or "ERROR")) throw new FormatException($"RESULTADO debe ser OK o ERROR, no '{result}'");
+            var ok = result == "OK";
+            var vbeln = r.Get("VBELN");
+            if (ok && vbeln is null) throw new FormatException("Falta el VBELN de un pedido creado");
+            _confirmations.Add(new OrderConfirmation(tenant, r.Required("ID_PORTAL"), ok, vbeln, r.Get("MENSAJE")));
+        });
+
         public void Orders(CsvTable t, string source)
         {
             // Una fila por posición: se agrupan por número de pedido (VBELN).
@@ -159,6 +226,6 @@ public sealed partial class SapFileConnector(SapFileOptions options) : IErpConne
             _payments.Add(new PaymentUpdate(tenant, r.Required("VBELN_FACTURA"), r.Get("BELNR"), r.Date("AUGDT"), r.Decimal("IMPORTE") ?? 0, r.Flag("COMPENSADO"))));
 
         public ErpBatch Build(string? cursor) =>
-            new(_reps.Values.ToList(), _customers, _orders, _deliveries, _tracking, _invoices, _payments, _issues, cursor);
+            new(_reps.Values.ToList(), _customers, _orders, _deliveries, _tracking, _invoices, _payments, _products, _prices, _shipTos, _confirmations, _issues, cursor);
     }
 }

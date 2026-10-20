@@ -123,6 +123,45 @@ export interface SyncInfo {
   runs: { at: string; ok: boolean; cursor?: string | null; orders: number; invoices: number; issues: { source: string; row?: number | null; message: string }[]; error?: string | null }[];
 }
 
+export interface Product {
+  tenantId: string;
+  erpId: string;
+  description: string;
+  unit: string;
+  category?: string | null;
+  basePrice: number;
+  taxRate: number;
+  stock?: number | null;
+  minQuantity: number;
+}
+
+export interface CatalogItem { product: Product; price: number; specialPrice: boolean }
+export interface ShipTo { tenantId: string; customerId: string; erpId: string; name: string; address: string }
+export interface Catalog { customer: Customer | null; categories: string[]; items: CatalogItem[]; shipTos: ShipTo[] }
+
+export type OrderRequestStatus = "PendienteErp" | "Creado" | "Rechazado";
+
+export interface OrderRequest {
+  tenantId: string;
+  id: string;
+  customerId: string;
+  createdBy: string;
+  createdByName?: string | null;
+  createdAt: string;
+  customerReference?: string | null;
+  requestedDate: string;
+  shipTo?: ShipTo | null;
+  notes?: string | null;
+  currency: string;
+  lines: { position: number; materialId: string; description: string; quantity: number; unit: string; unitPrice: number; netAmount: number; taxAmount: number }[];
+  status: OrderRequestStatus;
+  erpOrderId?: string | null;
+  message?: string | null;
+  netAmount: number;
+  taxAmount: number;
+  total: number;
+}
+
 export async function currentUserId(): Promise<string | null> {
   return (await cookies()).get(USER_COOKIE)?.value ?? null;
 }
@@ -146,6 +185,13 @@ export async function apiPost<T>(path: string): Promise<T | null> {
   const res = await call(path, { method: "POST" });
   if (!res.ok) return null;
   return (await res.json()) as T;
+}
+
+/** Envía JSON a la API y devuelve el código y el cuerpo, también en los errores (400 trae { errors }). */
+export async function apiSend<T>(method: "POST" | "PUT", path: string, body: unknown): Promise<{ status: number; data: T | null }> {
+  const res = await call(path, { method, body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+  const text = await res.text();
+  return { status: res.status, data: text ? (JSON.parse(text) as T) : null };
 }
 
 export async function apiRaw(path: string): Promise<Response> {

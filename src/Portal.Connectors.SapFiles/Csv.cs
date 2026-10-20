@@ -95,3 +95,27 @@ public sealed class CsvRow(IReadOnlyDictionary<string, int> index, IReadOnlyList
 
     public bool Flag(string column) => Get(column)?.ToUpperInvariant() is "X" or "S" or "1" or "SI" or "SÍ";
 }
+
+/// <summary>Escritura de CSV en el mismo formato que se lee: punto y coma, punto decimal y fechas AAAAMMDD.</summary>
+public static class Csv
+{
+    public static string Date(DateOnly d) => d.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+
+    public static string Decimal(decimal d) => d.ToString("0.00####", CultureInfo.InvariantCulture);
+
+    public static string Write(IReadOnlyList<string> headers, IEnumerable<IReadOnlyList<string?>> rows)
+    {
+        var sb = new StringBuilder();
+        sb.Append(string.Join(';', headers)).Append("\r\n");
+        foreach (var r in rows) sb.Append(string.Join(';', r.Select(Field))).Append("\r\n");
+        return sb.ToString();
+    }
+
+    // Texto libre del usuario: los saltos de línea se cambian por espacios y se entrecomilla si lleva ; o comillas.
+    private static string Field(string? v)
+    {
+        if (string.IsNullOrEmpty(v)) return "";
+        v = v.Replace("\r\n", " ").Replace('\n', ' ').Replace('\r', ' ');
+        return v.IndexOfAny([';', '"']) >= 0 || v != v.Trim() ? "\"" + v.Replace("\"", "\"\"") + "\"" : v;
+    }
+}

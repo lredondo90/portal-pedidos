@@ -23,6 +23,13 @@ public interface IPortalStore
     IReadOnlyList<InvoiceView> Invoices(UserContext user, InvoiceStatus? status, DateOnly today);
     Invoice? FindInvoice(UserContext user, string tenantId, string invoiceId);
     Delivery? FindDelivery(UserContext user, string tenantId, string deliveryId);
+    Customer? FindCustomer(UserContext user, string tenantId, string customerId);
+    IReadOnlyList<CatalogItem> Catalog(Customer customer, string? text = null, string? category = null);
+    CatalogItem? CatalogItem(Customer customer, string materialId);
+    IReadOnlyList<ShipTo> ShipTos(Customer customer);
+    void AddRequest(OrderRequest request);
+    IReadOnlyList<OrderRequest> Requests(UserContext user, string? customerId = null);
+    OrderRequest? Request(UserContext user, string tenantId, string requestId);
     StoreCounts Counts();
 }
 
@@ -39,6 +46,10 @@ public sealed class InMemoryPortalStore : IPortalStore
     private readonly ConcurrentDictionary<string, TrackingUpdate> _tracking = new();
     private readonly ConcurrentDictionary<string, Invoice> _invoices = new();
     private readonly ConcurrentDictionary<string, PaymentUpdate> _payments = new();
+    private readonly ConcurrentDictionary<string, Product> _products = new();
+    private readonly ConcurrentDictionary<string, CustomerPrice> _prices = new();
+    private readonly ConcurrentDictionary<string, ShipTo> _shipTos = new();
+    private readonly ConcurrentDictionary<string, OrderRequest> _requests = new();
 
     public void Apply(ErpBatch batch)
     {
@@ -57,6 +68,13 @@ public sealed class InMemoryPortalStore : IPortalStore
         }
         foreach (var i in batch.Invoices) _invoices[Key(i.TenantId, i.ErpId)] = i;
         foreach (var p in batch.Payments) _payments[Key(p.TenantId, p.InvoiceId)] = p;
+        foreach (var p in batch.Products) _products[Key(p.TenantId, p.ErpId)] = p;
+        foreach (var p in batch.Prices) _prices[Key(p.TenantId, p.CustomerId + "|" + p.MaterialId)] = p;
+        foreach (var s in batch.ShipTos) _shipTos[Key(s.TenantId, s.CustomerId + "|" + s.ErpId)] = s;
+        // Una confirmación de un pedido que este almacén no conoce (p. ej. tras reiniciar la demo en memoria) se ignora.
+        foreach (var c in batch.Confirmations)
+            if (_requests.TryGetValue(Key(c.TenantId, c.RequestId), out var r))
+                _requests[Key(c.TenantId, c.RequestId)] = r with { Status = c.Ok ? OrderRequestStatus.Creado : OrderRequestStatus.Rechazado, ErpOrderId = c.ErpOrderId, Message = c.Message };
     }
 
     public IReadOnlyList<Customer> Customers(UserContext user) =>
@@ -99,7 +117,49 @@ public sealed class InMemoryPortalStore : IPortalStore
         return _orders.TryGetValue(Key(tenantId, d.OrderId), out var o) && Visible(user, o.TenantId, o.CustomerId) ? d : null;
     }
 
+    public Customer? FindCustomer(UserContext user, string tenantId, string customerId) =>
+        _customers.TryGetValue(Key(tenantId, customerId), out var c) && AccessPolicy.CanSeeCustomer(user, c) ? c : null;
+
+    public IReadOnlyList<CatalogItem> Catalog(Customer customer, string? text = null, string? category = null)
+    {
+        var t = text?.Trim();
+        return _products.Values
+            .Where(p => p.TenantId == customer.TenantId)
+            .Where(p => string.IsNullOrEmpty(category) || p.Category == category)
+            .Where(p => string.IsNullOrEmpty(t) || p.Description.Contains(t, StringComparison.OrdinalIgnoreCase) || p.ErpId.Contains(t, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(p => p.Category).ThenBy(p => p.Description)
+            .Select(p => ItemFor(customer, p))
+            .ToList();
+    }
+
+    public CatalogItem? CatalogItem(Customer customer, string materialId) =>
+        _products.TryGetValue(Key(customer.TenantId, materialId), out var p) ? ItemFor(customer, p) : null;
+
+    public IReadOnlyList<ShipTo> ShipTos(Customer customer) =>
+        _shipTos.Values.Where(s => s.TenantId == customer.TenantId && s.CustomerId == customer.ErpId).OrderBy(s => s.ErpId).ToList();
+
+    public void AddRequest(OrderRequest request)
+    {
+        if (!_requests.TryAdd(Key(request.TenantId, request.Id), request))
+            throw new InvalidOperationException($"Ya existe el pedido {request.Id}");
+    }
+
+    public IReadOnlyList<OrderRequest> Requests(UserContext user, string? customerId = null) =>
+        _requests.Values
+            .Where(r => Visible(user, r.TenantId, r.CustomerId))
+            .Where(r => customerId is null || r.CustomerId == customerId)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToList();
+
+    public OrderRequest? Request(UserContext user, string tenantId, string requestId) =>
+        _requests.TryGetValue(Key(tenantId, requestId), out var r) && Visible(user, r.TenantId, r.CustomerId) ? r : null;
+
     public StoreCounts Counts() => new(_customers.Count, _orders.Count, _deliveries.Count, _invoices.Count);
+
+    private CatalogItem ItemFor(Customer customer, Product p) =>
+        _prices.TryGetValue(Key(p.TenantId, customer.ErpId + "|" + p.ErpId), out var special)
+            ? new CatalogItem(p, special.Price, true)
+            : new CatalogItem(p, p.BasePrice, false);
 
     private bool Visible(UserContext user, string tenantId, string customerId) =>
         _customers.TryGetValue(Key(tenantId, customerId), out var c) && AccessPolicy.CanSeeCustomer(user, c);
