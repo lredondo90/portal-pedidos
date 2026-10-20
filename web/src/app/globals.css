@@ -170,3 +170,4 @@ a.chip,a.btn{text-decoration:none}
 .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .banner.bad{border-style:solid;border-color:var(--bad);color:var(--bad)}
 @media (max-width:760px){.qty-form{flex-wrap:wrap}.qty{width:64px}}
+.install-hint{margin:0;font-size:12px}
