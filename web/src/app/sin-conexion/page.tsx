@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { OfflineOrders } from "@/components/OfflineOrders";
+import { BackToPortal, OfflineOrders } from "@/components/OfflineOrders";
 
 export const metadata: Metadata = { title: "Pedidos sin cobertura · Portal de Pedidos" };
 
@@ -14,7 +13,7 @@ export default function SinConexionPage() {
           <h1>Pedidos sin cobertura</h1>
           <p>Haz pedidos aunque no haya señal. Se guardan en el móvil y se envían solos cuando vuelve la conexión.</p>
         </div>
-        <Link className="btn" href="/">Volver al portal</Link>
+        <BackToPortal />
       </div>
       <OfflineOrders />
     </main>

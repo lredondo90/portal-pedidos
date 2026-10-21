@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useOnline, useOutbox } from "@/components/OfflineSync";
 import { cantidad, diaLaborable, eur, fecha, manana } from "@/lib/format";
@@ -133,7 +132,7 @@ export function OfflineOrders() {
           {online
             ? "Todavía no hay datos guardados en este móvil. Entra en el portal con tu usuario y vuelve a esta página."
             : "Todavía no hay datos guardados en este móvil. Ábrelo una vez con cobertura y entra con tu usuario: a partir de ahí podrás hacer pedidos sin señal."}
-          <div style={{ marginTop: 12 }}><Link className="btn primary" href="/">Ir al portal</Link></div>
+          <div style={{ marginTop: 12 }}><BackToPortal primary label="Ir al portal" /></div>
         </div>
       </section>
     );
@@ -312,5 +311,28 @@ function QueuedRow({ order: o }: { order: QueuedOrder }) {
         )}
       </td>
     </tr>
+  );
+}
+
+/**
+ * Vuelve al portal con una carga completa de la página (no con el enrutador de Next): esta página puede venir
+ * de la copia guardada en el móvil, y así el portal siempre se pide de nuevo al servidor.
+ * Sin cobertura el portal no se puede abrir: se explica en lugar de llevar a la pantalla «Sin conexión».
+ */
+export function BackToPortal({ label = "Volver al portal", primary = false }: { label?: string; primary?: boolean }) {
+  const online = useOnline();
+  const [warn, setWarn] = useState(false);
+  return (
+    <span style={{ display: "inline-flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+      <button
+        className={`btn${primary ? " primary" : ""}`}
+        type="button"
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- carga completa a propósito (ver arriba)
+        onClick={() => (navigator.onLine ? window.location.assign("/") : setWarn(true))}
+      >
+        {label}
+      </button>
+      {warn && !online && <span className="sub" role="status">Sin cobertura no se puede abrir el portal. Puedes seguir haciendo pedidos aquí; vuelve cuando haya señal.</span>}
+    </span>
   );
 }
