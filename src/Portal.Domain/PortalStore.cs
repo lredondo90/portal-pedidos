@@ -30,6 +30,8 @@ public interface IPortalStore
     void AddRequest(OrderRequest request);
     IReadOnlyList<OrderRequest> Requests(UserContext user, string? customerId = null);
     OrderRequest? Request(UserContext user, string tenantId, string requestId);
+    /// <summary>Pedido ya recibido con ese id del móvil, si lo hay (aunque lo hiciera otro usuario, solo si este puede verlo).</summary>
+    OrderRequest? RequestByClientId(UserContext user, string tenantId, string clientId);
     StoreCounts Counts();
     IReadOnlyList<SalesRep> SalesReps(UserContext user);
     IReadOnlyList<SaleView> Sales(UserContext user, DateOnly today);
@@ -52,6 +54,7 @@ public sealed class InMemoryPortalStore : IPortalStore
     private readonly ConcurrentDictionary<string, CustomerPrice> _prices = new();
     private readonly ConcurrentDictionary<string, ShipTo> _shipTos = new();
     private readonly ConcurrentDictionary<string, OrderRequest> _requests = new();
+    private readonly ConcurrentDictionary<string, string> _requestsByClientId = new();
 
     // Índices secundarios: evitan recorrer todos los pedidos, entregas y facturas en cada consulta.
     // Son el equivalente en memoria de los índices de db/schema.sql.
@@ -191,8 +194,14 @@ public sealed class InMemoryPortalStore : IPortalStore
 
     public void AddRequest(OrderRequest request)
     {
-        if (!_requests.TryAdd(Key(request.TenantId, request.Id), request))
+        var key = Key(request.TenantId, request.Id);
+        if (request.ClientId is not null && !_requestsByClientId.TryAdd(Key(request.TenantId, request.ClientId), key))
+            throw new InvalidOperationException($"Ya existe un pedido con el id del móvil {request.ClientId}");
+        if (!_requests.TryAdd(key, request))
+        {
+            if (request.ClientId is not null) _requestsByClientId.TryRemove(Key(request.TenantId, request.ClientId), out _);
             throw new InvalidOperationException($"Ya existe el pedido {request.Id}");
+        }
     }
 
     public IReadOnlyList<OrderRequest> Requests(UserContext user, string? customerId = null) =>
@@ -204,6 +213,9 @@ public sealed class InMemoryPortalStore : IPortalStore
 
     public OrderRequest? Request(UserContext user, string tenantId, string requestId) =>
         _requests.TryGetValue(Key(tenantId, requestId), out var r) && Visible(user, r.TenantId, r.CustomerId) ? r : null;
+
+    public OrderRequest? RequestByClientId(UserContext user, string tenantId, string clientId) =>
+        _requestsByClientId.TryGetValue(Key(tenantId, clientId), out var key) && _requests.TryGetValue(key, out var r) && Visible(user, r.TenantId, r.CustomerId) ? r : null;
 
     public StoreCounts Counts() => new(_customers.Count, _orders.Count, _deliveries.Count, _invoices.Count);
 

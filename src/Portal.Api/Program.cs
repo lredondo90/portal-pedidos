@@ -39,6 +39,7 @@ else
     if (files.SimulateSap) builder.Services.AddHostedService<DemoSapSimulator>();
 }
 builder.Services.AddSingleton<SyncService>();
+builder.Services.AddSingleton<ClientOrderGate>();
 builder.Services.AddHostedService<SyncWorker>();
 
 var app = builder.Build();
@@ -105,33 +106,58 @@ api.MapGet("/catalog", (CurrentUser cu, IPortalStore store, string? customer, st
     return Results.Ok(new CatalogResponse(c, categories, store.Catalog(c, q, category), store.ShipTos(c)));
 });
 
-api.MapPost("/order-requests", async (OrderDraft draft, CurrentUser cu, IPortalStore store, IErpConnector erp, TimeProvider t, ILogger<Program> log, CancellationToken ct) =>
+api.MapPost("/order-requests", async (OrderDraft draft, CurrentUser cu, IPortalStore store, IErpConnector erp, ClientOrderGate gate, TimeProvider t, ILogger<Program> log, CancellationToken ct) =>
 {
     var user = cu.Get()!;
     if (store.FindCustomer(user, user.TenantId, draft.CustomerId) is not { } customer) return Results.NotFound();
-    var shipTo = draft.ShipToId is null ? null : store.ShipTos(customer).FirstOrDefault(s => s.ErpId == draft.ShipToId);
-    var draftLines = draft.Lines ?? [];
-    var (lines, errors) = OrderRules.Price(draft with { Lines = draftLines }, m => store.CatalogItem(customer, m), Today(t), draft.ShipToId is null || shipTo is not null);
-    if (errors.Count > 0) return Results.BadRequest(new { errors });
 
-    var now = t.GetUtcNow();
-    var request = new OrderRequest(customer.TenantId, OrderRequestIds.New(now), customer.ErpId, user.UserId, cu.Name(), now,
-        string.IsNullOrWhiteSpace(draft.CustomerReference) ? null : draft.CustomerReference.Trim(), draft.RequestedDate, shipTo,
-        string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(), "EUR", lines);
-    var sent = await erp.SubmitOrderAsync(request, customer, ct);
-    if (!sent.Accepted)
+    // Pedidos hechos sin cobertura: el móvil puede mandar el mismo pedido varias veces (se cortó la conexión
+    // antes de recibir la respuesta). Si ya llegó, se devuelve el que hay en lugar de crear otro.
+    var clientId = OrderRules.IsValidClientId(draft.ClientId) ? draft.ClientId : null;
+    if (clientId is not null && store.RequestByClientId(user, customer.TenantId, clientId) is { } existing) return Results.Ok(existing);
+    if (clientId is not null && !gate.TryEnter(customer.TenantId, clientId))
+        return Results.Problem("Este pedido se está enviando ahora mismo.", statusCode: StatusCodes.Status409Conflict);
+    try
     {
-        log.LogWarning("El ERP no ha aceptado el pedido {Id}: {Message}", request.Id, sent.Message);
-        return Results.Problem(sent.Message ?? "SAP no ha aceptado el pedido", statusCode: StatusCodes.Status502BadGateway);
+        var shipTo = draft.ShipToId is null ? null : store.ShipTos(customer).FirstOrDefault(s => s.ErpId == draft.ShipToId);
+        var draftLines = draft.Lines ?? [];
+        var (lines, errors) = OrderRules.Price(draft with { Lines = draftLines }, m => store.CatalogItem(customer, m), Today(t), draft.ShipToId is null || shipTo is not null);
+        if (errors.Count > 0) return Results.BadRequest(new { errors });
+
+        var now = t.GetUtcNow();
+        var captured = draft.CapturedAt is { } c && c <= now && c > now.AddDays(-60) ? c : (DateTimeOffset?)null;
+        var request = new OrderRequest(customer.TenantId, OrderRequestIds.New(now), customer.ErpId, user.UserId, cu.Name(), now,
+            string.IsNullOrWhiteSpace(draft.CustomerReference) ? null : draft.CustomerReference.Trim(), draft.RequestedDate, shipTo,
+            string.IsNullOrWhiteSpace(draft.Notes) ? null : draft.Notes.Trim(), "EUR", lines, ClientId: clientId, CapturedAt: captured);
+        var sent = await erp.SubmitOrderAsync(request, customer, ct);
+        if (!sent.Accepted)
+        {
+            log.LogWarning("El ERP no ha aceptado el pedido {Id}: {Message}", request.Id, sent.Message);
+            return Results.Problem(sent.Message ?? "SAP no ha aceptado el pedido", statusCode: StatusCodes.Status502BadGateway);
+        }
+        store.AddRequest(request);
+        return Results.Created($"/api/order-requests/{request.TenantId}/{request.Id}", request);
     }
-    store.AddRequest(request);
-    return Results.Created($"/api/order-requests/{request.TenantId}/{request.Id}", request);
+    finally
+    {
+        if (clientId is not null) gate.Exit(customer.TenantId, clientId);
+    }
 });
 
 api.MapGet("/order-requests", (CurrentUser cu, IPortalStore store, string? customer) => store.Requests(cu.Get()!, customer));
 
 api.MapGet("/order-requests/{tenant}/{id}", (string tenant, string id, CurrentUser cu, IPortalStore store) =>
     store.Request(cu.Get()!, tenant, id) is { } r ? Results.Ok(r) : Results.NotFound());
+
+// Datos para hacer pedidos sin cobertura: la app los guarda en el móvil. Solo los clientes que el usuario puede ver
+// (la cartera del comercial), con sus direcciones y precios especiales; el resto de artículos va a precio de tarifa.
+api.MapGet("/offline-pack", (CurrentUser cu, IPortalStore store, SyncService sync, TimeProvider t) =>
+{
+    var user = cu.Get()!;
+    if (AccessPolicy.IsAdmin(user))
+        return Results.Problem("Administración no usa pedidos sin cobertura: entra como comercial o cliente.", statusCode: StatusCodes.Status403Forbidden);
+    return Results.Ok(OfflinePack.Build(user, store, sync.History.FirstOrDefault(r => r.Ok)?.At, t.GetUtcNow()));
+});
 
 api.MapCommissions();
 

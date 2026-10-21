@@ -22,6 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "Hacer pedido", url: "/catalogo" },
+      { name: "Pedido sin cobertura", url: "/sin-conexion" },
       { name: "Mis pedidos", url: "/pedidos" },
       { name: "Facturas", url: "/facturas" },
     ],

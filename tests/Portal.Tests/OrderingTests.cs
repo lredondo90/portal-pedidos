@@ -164,4 +164,51 @@ public sealed class OrderingTests : IDisposable
         Assert.Equal((OrderRequestStatus.Rechazado, "Cliente bloqueado por crédito"), (r.Status, r.Message));
         Assert.Single(store.Requests(Ana));
     }
+
+    [Fact]
+    public async Task Order_sent_twice_from_the_phone_is_kept_once()
+    {
+        var (_, store) = await Load();
+        var ana = store.FindCustomer(Ana, "demo", "0000100231")!;
+        var request = Request(ana, Draft(), [], null) with { ClientId = "6f1c2a9e-0d4b-4c5e-9f7a-1b2c3d4e5f60" };
+        store.AddRequest(request);
+
+        Assert.Equal("W261020-TEST1", store.RequestByClientId(Ana, "demo", "6f1c2a9e-0d4b-4c5e-9f7a-1b2c3d4e5f60")?.Id);
+        Assert.Throws<InvalidOperationException>(() => store.AddRequest(request with { Id = "W261020-TEST2" }));
+        Assert.Null(store.Request(Ana, "demo", "W261020-TEST2"));
+        Assert.Null(store.RequestByClientId(new UserContext("otro", "demo", Role.SalesRep, SalesRepId: "E999"), "demo", "6f1c2a9e-0d4b-4c5e-9f7a-1b2c3d4e5f60"));
+
+        var gate = new ClientOrderGate();
+        Assert.True(gate.TryEnter("demo", "abc12345"));
+        Assert.False(gate.TryEnter("demo", "abc12345"));
+        gate.Exit("demo", "abc12345");
+        Assert.True(gate.TryEnter("demo", "abc12345"));
+    }
+
+    [Fact]
+    public void Client_id_must_look_like_an_id()
+    {
+        Assert.True(OrderRules.IsValidClientId("6f1c2a9e-0d4b-4c5e-9f7a-1b2c3d4e5f60"));
+        Assert.False(OrderRules.IsValidClientId("corto"));
+        Assert.False(OrderRules.IsValidClientId("con espacios 123"));
+        Assert.False(OrderRules.IsValidClientId(new string('a', 65)));
+        Assert.Contains("El identificador del pedido no es válido.", OrderRules.Price(Draft(("10004512", 1)) with { ClientId = "x;y" }, _ => null, Today, true).Errors);
+    }
+
+    [Fact]
+    public async Task Offline_pack_has_only_the_portfolio_and_its_special_prices()
+    {
+        var (_, store) = await Load();
+        var at = new DateTimeOffset(2026, 10, 20, 6, 0, 0, TimeSpan.Zero);
+        var pack = OfflinePack.Build(Laura, store, at, at.AddHours(2));
+
+        Assert.Equal(store.Customers(Laura).Select(c => c.ErpId), pack.Customers.Select(c => c.Customer.ErpId));
+        Assert.DoesNotContain(pack.Customers, c => c.Customer.ErpId == "0000100679");
+        Assert.Equal(15, pack.Products.Count);
+        Assert.Equal(at, pack.DataAt);
+        var ana = pack.Customers.Single(c => c.Customer.ErpId == "0000100231");
+        Assert.Contains(new OfflinePrice("10004512", 18.40m), ana.Prices);
+        Assert.DoesNotContain(ana.Prices, p => p.MaterialId == "10004530");
+        Assert.Equal(["0000100231", "0000100232"], ana.ShipTos.Select(s => s.ErpId));
+    }
 }
