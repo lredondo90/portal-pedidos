@@ -14,7 +14,9 @@
   img{width:56px;height:56px;border-radius:12px}
   h1{font-size:20px;margin:12px 0 4px}
   p{color:var(--ink-2);margin:0 0 16px}
-  button{border:0;border-radius:8px;padding:10px 18px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600}
+  .actions{display:flex;flex-direction:column;gap:10px}
+  button,a.btn{border:0;border-radius:8px;padding:10px 18px;background:var(--accent);color:var(--accent-ink);font:inherit;font-weight:600;text-decoration:none}
+  button.sec{background:transparent;color:var(--ink);border:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -22,7 +24,11 @@
     <img src="/icon-192.png" alt="">
     <h1>Sin conexión</h1>
     <p>No hay internet ahora mismo. Tus pedidos y facturas aparecerán en cuanto vuelva la conexión.</p>
-    <button onclick="location.reload()">Reintentar</button>
+    <p>Mientras tanto puedes hacer pedidos: se guardan en el móvil y se envían solos cuando vuelva la señal.</p>
+    <div class="actions">
+      <a class="btn" href="/sin-conexion">Hacer un pedido sin cobertura</a>
+      <button class="sec" onclick="location.reload()">Reintentar</button>
+    </div>
   </main>
   <script>addEventListener("online", () => location.reload());</script>
 </body>

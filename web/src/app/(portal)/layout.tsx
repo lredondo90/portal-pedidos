@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { InstallApp } from "@/components/InstallApp";
 import { Nav } from "@/components/Nav";
+import { LogoutButton, OfflineSync } from "@/components/OfflineSync";
 import { logout } from "@/lib/actions";
 import { apiGet, currentUserId, isAdmin, type Me } from "@/lib/api";
 import { cartCount, readCart } from "@/lib/cart";
@@ -23,7 +24,7 @@ export default async function PortalLayout({ children }: LayoutProps<"/">) {
     { href: "/facturas", label: "Facturas y pagos" },
     role === "Customer" ? { href: "/cuenta", label: "Mi cuenta" } : { href: "/clientes", label: "Clientes" },
     ...(role !== "Customer" ? [{ href: "/ventas", label: "Ventas y comisiones" }] : []),
-    ...(isAdmin(role) ? [{ href: "/sincronizacion", label: "Sincronización" }] : []),
+    ...(isAdmin(role) ? [{ href: "/sincronizacion", label: "Sincronización" }] : [{ href: "/sin-conexion", label: "Pedidos sin cobertura" }]),
   ];
   const name = me.name ?? me.user.userId;
   const initials = name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
@@ -49,12 +50,13 @@ export default async function PortalLayout({ children }: LayoutProps<"/">) {
             </span>
           </div>
           <InstallApp />
-          <form action={logout}>
-            <button className="btn sm" type="submit">Cambiar de usuario</button>
-          </form>
+          <LogoutButton user={me.user.userId} action={logout} />
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        <OfflineSync user={me.user.userId} offlineOrders={!isAdmin(role)} />
+        {children}
+      </main>
     </div>
   );
 }

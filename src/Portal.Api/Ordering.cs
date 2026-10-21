@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,6 +8,35 @@ using Portal.Domain;
 namespace Portal.Api;
 
 public sealed record CatalogResponse(Customer? Customer, IReadOnlyList<string> Categories, IReadOnlyList<CatalogItem> Items, IReadOnlyList<ShipTo> ShipTos);
+
+/// <summary>Evita que dos envíos del mismo pedido del móvil (mismo id) se procesen a la vez y lleguen dos veces a SAP.</summary>
+public sealed class ClientOrderGate
+{
+    private readonly ConcurrentDictionary<string, byte> _inFlight = new();
+
+    public bool TryEnter(string tenantId, string clientId) => _inFlight.TryAdd(tenantId + "|" + clientId, 0);
+
+    public void Exit(string tenantId, string clientId) => _inFlight.TryRemove(tenantId + "|" + clientId, out _);
+}
+
+public sealed record OfflinePrice(string MaterialId, decimal Price);
+
+public sealed record OfflineCustomer(Customer Customer, IReadOnlyList<ShipTo> ShipTos, IReadOnlyList<OfflinePrice> Prices);
+
+/// <summary>Lo que el móvil guarda para pedir sin cobertura. DataAt es la última sincronización correcta con el ERP: la antigüedad de precios y stock.</summary>
+public sealed record OfflinePack(string UserId, string TenantId, DateTimeOffset GeneratedAt, DateTimeOffset? DataAt, IReadOnlyList<Product> Products, IReadOnlyList<OfflineCustomer> Customers)
+{
+    public static OfflinePack Build(UserContext user, IPortalStore store, DateTimeOffset? dataAt, DateTimeOffset now)
+    {
+        var customers = store.Customers(user);
+        var products = customers.Count == 0 ? [] : store.Catalog(customers[0]).Select(i => i.Product).ToList();
+        var list = customers
+            .Select(c => new OfflineCustomer(c, store.ShipTos(c),
+                store.Catalog(c).Where(i => i.SpecialPrice).Select(i => new OfflinePrice(i.Product.ErpId, i.Price)).ToList()))
+            .ToList();
+        return new OfflinePack(user.UserId, user.TenantId, now, dataAt, products, list);
+    }
+}
 
 public static class OrderRequestIds
 {

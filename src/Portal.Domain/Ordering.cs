@@ -48,7 +48,9 @@ public sealed record OrderRequest(
     IReadOnlyList<OrderRequestLine> Lines,
     OrderRequestStatus Status = OrderRequestStatus.PendienteErp,
     string? ErpOrderId = null,
-    string? Message = null)
+    string? Message = null,
+    string? ClientId = null,
+    DateTimeOffset? CapturedAt = null)
 {
     public decimal NetAmount => Lines.Sum(l => l.NetAmount);
     public decimal TaxAmount => Lines.Sum(l => l.TaxAmount);
@@ -70,13 +72,23 @@ public sealed record OrderDraft(
     DateOnly RequestedDate,
     string? ShipToId,
     string? Notes,
-    IReadOnlyList<OrderDraftLine> Lines);
+    IReadOnlyList<OrderDraftLine> Lines,
+    string? ClientId = null,
+    DateTimeOffset? CapturedAt = null);
 
 public static class OrderRules
 {
     public const int MaxReference = 35;   // longitud de BSTKD en SAP
     public const int MaxNotes = 500;
     public const int MaxLines = 200;
+    public const int MaxClientId = 64;
+
+    /// <summary>
+    /// Id que el móvil pone al pedido al crearlo (un UUID). Si el pedido se reenvía porque se cortó la conexión,
+    /// el portal lo reconoce por este id y no lo duplica.
+    /// </summary>
+    public static bool IsValidClientId(string? id) =>
+        id is { Length: >= 8 and <= MaxClientId } && id.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
 
     public static decimal Round(decimal v) => Math.Round(v, 2, MidpointRounding.AwayFromZero);
 
@@ -96,6 +108,7 @@ public static class OrderRules
         if (draft.CustomerReference?.Length > MaxReference) errors.Add($"Su referencia admite como máximo {MaxReference} caracteres.");
         if (draft.Notes?.Length > MaxNotes) errors.Add($"Las observaciones admiten como máximo {MaxNotes} caracteres.");
         if (!shipToValid) errors.Add("La dirección de entrega no es de este cliente.");
+        if (draft.ClientId is not null && !IsValidClientId(draft.ClientId)) errors.Add("El identificador del pedido no es válido.");
 
         foreach (var g in draft.Lines.GroupBy(l => l.MaterialId))
         {

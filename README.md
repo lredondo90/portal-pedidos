@@ -84,7 +84,7 @@ de `samples/sap-export`. Mientras el almacén sea en memoria, los cambios en reg
 ## App en el móvil y Google Play
 
 La web es una app instalable (PWA): `web/src/app/manifest.ts`, iconos en `web/public` y un service worker (`web/public/sw.js`)
-que solo guarda los ficheros estáticos y la página `offline.html`; los datos de clientes nunca se guardan en el móvil.
+que guarda los ficheros estáticos, la página `offline.html` y la de pedidos sin cobertura.
 En Android y en el ordenador aparece el botón «Instalar la app»; en iPhone se indica Compartir → «Añadir a pantalla de inicio».
 
 Para publicarla en Google Play se empaqueta como Trusted Web Activity, sin código Android propio:
@@ -96,6 +96,23 @@ Para publicarla en Google Play se empaqueta como Trusted Web Activity, sin códi
    `/.well-known/assetlinks.json` las publica y la app abre a pantalla completa, sin barra del navegador.
 
 Las cuentas personales nuevas deben pasar una prueba cerrada con 12 personas durante 14 días antes de publicar; las de empresa no.
+
+## Pedidos sin cobertura
+
+Pensado para zonas con mala señal. Al abrir el portal con conexión, el móvil guarda en IndexedDB los datos de la cartera
+del usuario (`GET /api/offline-pack`: sus clientes, direcciones, artículos y precios especiales; administración no lo usa).
+En `/sin-conexion` (página estática que el service worker sirve sin red) el comercial hace el pedido; se guarda en el móvil
+y se envía solo al volver la señal: al abrir la app, al volver a ella, al recuperar la red y cada 30 s; en Android también
+con la app cerrada (Background Sync). iPhone no tiene envío en segundo plano.
+
+- Cada pedido lleva un id del móvil (`clientId`). Si se reenvía porque se cortó la conexión, la API devuelve el que ya
+  existe (200) en lugar de crear otro; dos envíos simultáneos del mismo id se frenan con 409.
+- Los precios del móvil son orientativos: la API vuelve a calcular el precio al recibir el pedido. La pantalla muestra la
+  fecha de la última sincronización con SAP y avisa pasadas 24 h.
+- Si al llegar el pedido ya no es válido (p. ej. la fecha de entrega ya pasó) queda en «Revisar» para cambiar la fecha o borrarlo.
+- Cada pedido solo se envía con la sesión de quien lo hizo; al cambiar de usuario se borran los datos de la cartera del móvil.
+  La sesión dura 30 días para que los pedidos guardados puedan salir aunque la app se cierre.
+- Código: `web/src/lib/offline.ts`, `web/src/components/OfflineOrders.tsx`, `web/public/sw.js`.
 
 ## Próximos pasos
 

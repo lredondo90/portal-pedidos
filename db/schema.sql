@@ -177,9 +177,12 @@ CREATE TABLE order_request (
     status             text NOT NULL DEFAULT 'PendienteErp',
     erp_order_id       text,
     message            text,
+    client_id          text,                           -- id que pone el móvil al hacer el pedido: evita duplicados al reenviar
+    captured_at        timestamptz,                    -- cuándo lo hizo el comercial (puede ser antes de enviarlo, sin cobertura)
     PRIMARY KEY (tenant_id, id),
     FOREIGN KEY (tenant_id, customer_id) REFERENCES customer(tenant_id, erp_id)
 );
+CREATE UNIQUE INDEX order_request_client ON order_request (tenant_id, client_id) WHERE client_id IS NOT NULL;
 CREATE INDEX order_request_customer ON order_request (tenant_id, customer_id, created_at DESC);
 -- Los que esperan respuesta de SAP: pocos, y se consultan en cada sincronización.
 CREATE INDEX order_request_pending ON order_request (tenant_id) WHERE status = 'PendienteErp';

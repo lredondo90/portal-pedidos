@@ -11,7 +11,8 @@ const DEMO_USERS = ["ana", "laura", "javier", "marta"];
 export async function loginDemo(formData: FormData) {
   const user = String(formData.get("user") ?? "");
   if (!DEMO_USERS.includes(user)) redirect("/login");
-  (await cookies()).set(USER_COOKIE, user, { httpOnly: true, sameSite: "lax", path: "/" });
+  // Persistente: en el móvil la app se cierra a menudo y los pedidos guardados sin cobertura necesitan la sesión para salir.
+  (await cookies()).set(USER_COOKIE, user, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
   redirect("/");
 }
 
